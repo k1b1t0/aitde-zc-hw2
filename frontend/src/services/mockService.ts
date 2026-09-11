@@ -589,6 +589,10 @@ export class MockKanbanService implements KanbanService {
   async releaseCardLock(boardId: string, cardId: string): Promise<void> {
     const boardLocks = this.cardLocks.get(boardId)
     if (boardLocks && boardLocks.has(cardId)) {
+      const lock = boardLocks.get(cardId)
+      if (lock && lock.userId !== this.currentUser.id) {
+        return
+      }
       boardLocks.delete(cardId)
       this.broadcast(boardId, {
         type: 'CARD_UNLOCKED',

@@ -283,16 +283,28 @@ export class BackendKanbanService implements KanbanService {
 
   // --- Real-time WebSocket ---
   private connectWebSocket(boardId: string) {
+    if (!this.token) {
+      return
+    }
+
+    // If already connected or connecting to the same board, avoid tearing down
+    if (
+      this.ws &&
+      (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING) &&
+      this.activeBoardId === boardId
+    ) {
+      return
+    }
+
     if (this.ws) {
       try {
+        this.ws.onclose = null
+        this.ws.onerror = null
         this.ws.close()
       } catch {
         // ignore
       }
-    }
-
-    if (!this.token) {
-      return
+      this.ws = null
     }
 
     this.setConnectionStatus('connecting')
@@ -317,12 +329,12 @@ export class BackendKanbanService implements KanbanService {
         }
       }
 
-      this.ws.onclose = () => {
+      this.ws.onclose = (event) => {
+        // Only set disconnected and schedule reconnect if this is still the active socket
         this.setConnectionStatus('disconnected')
-        // Auto-reconnect after 2 seconds
         if (this.reconnectTimeout) clearTimeout(this.reconnectTimeout)
         this.reconnectTimeout = setTimeout(() => {
-          if (this.activeBoardId === boardId) {
+          if (this.activeBoardId === boardId && (!this.ws || this.ws.readyState === WebSocket.CLOSED)) {
             this.connectWebSocket(boardId)
           }
         }, 2000)

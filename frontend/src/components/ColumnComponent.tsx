@@ -18,6 +18,13 @@ export const ColumnComponent: React.FC<ColumnProps> = ({ column, cards, onEditCa
   const [columnTitle, setColumnTitle] = useState(column.title)
   const [isDragOver, setIsDragOver] = useState(false)
 
+  // Synchronize columnTitle with incoming prop updates from peers when not actively editing
+  React.useEffect(() => {
+    if (!isEditingTitle) {
+      setColumnTitle(column.title)
+    }
+  }, [column.title, isEditingTitle])
+
   const handleAddCardSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newCardTitle.trim()) return

@@ -112,17 +112,6 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenInvite }) => {
 
       {/* Right Controls */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-        {/* Simulate Peer Bot Typing Demo Button */}
-        <button
-          onClick={simulatePeerActivity}
-          className="retro-btn"
-          title="Simulate remote peer typing live and updating cards"
-          style={{ borderColor: 'var(--accent-magenta)', color: 'var(--accent-magenta)' }}
-        >
-          <Sparkles size={13} />
-          <span>SIMULATE_PEER</span>
-        </button>
-
         {/* Invite Link Button */}
         <button
           onClick={onOpenInvite}

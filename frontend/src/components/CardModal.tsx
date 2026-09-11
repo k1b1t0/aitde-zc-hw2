@@ -119,7 +119,11 @@ export const CardModal: React.FC<CardModalProps> = ({ card, onClose }) => {
   const toggleTag = (tag: CardTag) => {
     const updated = tags.includes(tag) ? tags.filter((t) => t !== tag) : [...tags, tag]
     setTags(updated)
-    updateCard(card.id, { tags: updated })
+    updateCard(card.id, {
+      title: title.trim() || card.title,
+      description: description.trim(),
+      tags: updated,
+    })
   }
 
   return (
@@ -283,7 +287,11 @@ export const CardModal: React.FC<CardModalProps> = ({ card, onClose }) => {
                 onChange={(e) => {
                   const val = e.target.value || undefined
                   setAssigneeId(val)
-                  updateCard(card.id, { assigneeId: val })
+                  updateCard(card.id, {
+                    title: title.trim() || card.title,
+                    description: description.trim(),
+                    assigneeId: val,
+                  })
                 }}
                 style={{
                   width: '100%',
@@ -316,7 +324,11 @@ export const CardModal: React.FC<CardModalProps> = ({ card, onClose }) => {
                 onChange={(e) => {
                   const val = e.target.value
                   setDueDate(val)
-                  updateCard(card.id, { dueDate: val || undefined })
+                  updateCard(card.id, {
+                    title: title.trim() || card.title,
+                    description: description.trim(),
+                    dueDate: val || undefined,
+                  })
                 }}
                 style={{
                   width: '100%',

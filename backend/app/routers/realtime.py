@@ -35,15 +35,16 @@ async def acquire_card_lock(board_id: str, card_id: str, current_user: User = De
 
 @router.delete("/boards/{board_id}/cards/{card_id}/lock", status_code=status.HTTP_204_NO_CONTENT)
 async def release_card_lock(board_id: str, card_id: str, current_user: User = Depends(get_current_user)):
-    store.release_lock(board_id, card_id)
-    msg = WebSocketMessage(
-        type="CARD_UNLOCKED",
-        boardId=board_id,
-        senderId=current_user.id,
-        payload={"cardId": card_id},
-        timestamp=int(time.time() * 1000),
-    )
-    await store.broadcast_to_board(board_id, msg)
+    released = store.release_lock(board_id, card_id, current_user.id)
+    if released:
+        msg = WebSocketMessage(
+            type="CARD_UNLOCKED",
+            boardId=board_id,
+            senderId=current_user.id,
+            payload={"cardId": card_id},
+            timestamp=int(time.time() * 1000),
+        )
+        await store.broadcast_to_board(board_id, msg)
     return None
 
 @router.websocket("/ws/boards/{board_id}")

@@ -367,9 +367,14 @@ class InMemoryStore:
         )
         return True
 
-    def release_lock(self, board_id: str, card_id: str):
+    def release_lock(self, board_id: str, card_id: str, user_id: Optional[str] = None) -> bool:
         if board_id in self.card_locks and card_id in self.card_locks[board_id]:
+            current = self.card_locks[board_id][card_id]
+            if user_id and current.userId != user_id:
+                return False
             del self.card_locks[board_id][card_id]
+            return True
+        return False
 
     # --- WebSocket connection management ---
     def add_connection(self, board_id: str, websocket: WebSocket):

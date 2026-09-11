@@ -49,6 +49,10 @@ export const BoardProvider: React.FC<{ boardId?: string; children: React.ReactNo
   const typingTimeoutsRef = useRef<Record<string, any>>({})
 
   const service = getKanbanService()
+  const currentUserRef = useRef(currentUser)
+  useEffect(() => {
+    currentUserRef.current = currentUser
+  }, [currentUser])
 
   const loadBoardData = useCallback(async () => {
     try {
@@ -222,7 +226,7 @@ export const BoardProvider: React.FC<{ boardId?: string; children: React.ReactNo
           }, 3500)
 
           // Also update card in local state if sender is peer
-          if (currentUser && msg.senderId !== currentUser.id) {
+          if (currentUserRef.current && msg.senderId !== currentUserRef.current.id) {
             setBoard((prev) => {
               if (!prev) return prev
               return {
@@ -259,7 +263,7 @@ export const BoardProvider: React.FC<{ boardId?: string; children: React.ReactNo
       unsubConn()
       unsubWs()
     }
-  }, [boardId, currentUser, loadBoardData, service])
+  }, [boardId, loadBoardData, service])
 
   const createColumn = async (title: string) => {
     if (!board) return
@@ -304,7 +308,11 @@ export const BoardProvider: React.FC<{ boardId?: string; children: React.ReactNo
       order: colCards.length,
       assigneeId: currentUser?.id,
     })
-    setBoard((prev) => (prev ? { ...prev, cards: [...prev.cards, card] } : prev))
+    setBoard((prev) => {
+      if (!prev) return prev
+      if (prev.cards.some((c) => c.id === card.id)) return prev
+      return { ...prev, cards: [...prev.cards, card] }
+    })
   }
 
   const updateCard = async (cardId: string, updates: Partial<Card>) => {
