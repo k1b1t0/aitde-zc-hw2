@@ -1,14 +1,19 @@
-import { KanbanService } from './api'
+import type { KanbanService } from './api'
+import { backendKanbanService } from './backendService'
 import { mockKanbanService } from './mockService'
 
 /**
  * Service Factory
- * In dev / test / standalone mode, returns the comprehensive MockKanbanService.
- * When a real backend is available (e.g. FastAPI), an HttpWebsocketKanbanService
- * can be plugged in here without touching any React components.
+ * When VITE_USE_MOCK is 'true' or in tests, returns mockKanbanService.
+ * Otherwise, uses the real FastAPI backend client (backendKanbanService).
  */
+const useMock = import.meta.env.VITE_USE_MOCK === 'true' || import.meta.env.MODE === 'test'
+
 export const getKanbanService = (): KanbanService => {
-  return mockKanbanService
+  if (useMock) {
+    return mockKanbanService
+  }
+  return backendKanbanService
 }
 
-export { mockKanbanService }
+export { backendKanbanService, mockKanbanService }
