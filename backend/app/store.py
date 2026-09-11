@@ -1,9 +1,13 @@
-import time
 import datetime
+import json
+import time
 from typing import Dict, List, Optional, Set, Tuple
 from fastapi import WebSocket
+from sqlalchemy.orm import Session
 
 from app.auth import get_password_hash
+from app.database import Base, SessionLocal, engine
+from app.db_models import BoardDB, CardDB, ColumnDB, UserDB, board_members
 from app.models import (
     Board,
     Card,
@@ -14,19 +18,26 @@ from app.models import (
     WebSocketMessage,
 )
 
-class InMemoryStore:
+class DatabaseStore:
     def __init__(self):
-        self.users: Dict[str, UserInDB] = {}
-        self.boards: Dict[str, Board] = {}
+        # In-memory ephemeral states for real-time collaboration
         self.card_locks: Dict[str, Dict[str, CardLock]] = {}  # boardId -> (cardId -> lock)
         self.active_connections: Dict[str, Set[WebSocket]] = {}  # boardId -> active websockets
-        self.seed_data()
 
-    def seed_data(self):
+    def init_db(self):
+        # Create tables
+        Base.metadata.create_all(bind=engine)
+
+        # Seed initial data if empty
+        with SessionLocal() as db:
+            if db.query(UserDB).count() == 0:
+                self.seed_data(db)
+
+    def seed_data(self, db: Session):
         default_pw_hash = get_password_hash("password123")
 
         demo_users = [
-            UserInDB(
+            UserDB(
                 id="user-1",
                 name="Alex Morgan",
                 email="alex@example.com",
@@ -34,7 +45,7 @@ class InMemoryStore:
                 color="#3b82f6",
                 hashed_password=default_pw_hash,
             ),
-            UserInDB(
+            UserDB(
                 id="user-2",
                 name="Sarah Chen",
                 email="sarah@example.com",
@@ -42,7 +53,7 @@ class InMemoryStore:
                 color="#10b981",
                 hashed_password=default_pw_hash,
             ),
-            UserInDB(
+            UserDB(
                 id="user-3",
                 name="David Kim",
                 email="david@example.com",
@@ -50,7 +61,7 @@ class InMemoryStore:
                 color="#8b5cf6",
                 hashed_password=default_pw_hash,
             ),
-            UserInDB(
+            UserDB(
                 id="user-4",
                 name="Elena Rostova",
                 email="elena@example.com",
@@ -59,217 +70,298 @@ class InMemoryStore:
                 hashed_password=default_pw_hash,
             ),
         ]
+        db.add_all(demo_users)
+        db.flush()
 
-        for u in demo_users:
-            self.users[u.id] = u
-
-        initial_board = Board(
+        initial_board = BoardDB(
             id="board-demo-1",
             title="Team Product Launch",
             description="Collaborative Sprint Kanban with real-time multi-user live sync",
-            ownerId="user-1",
-            inviteToken="invite-collab-xyz",
-            members=[User(**u.model_dump()) for u in demo_users],
-            columns=[
-                Column(id="col-1", boardId="board-demo-1", title="To Do", order=0),
-                Column(id="col-2", boardId="board-demo-1", title="In Progress", order=1),
-                Column(id="col-3", boardId="board-demo-1", title="Review", order=2),
-                Column(id="col-4", boardId="board-demo-1", title="Done", order=3),
-            ],
-            cards=[
-                Card(
-                    id="card-1",
-                    columnId="col-1",
-                    title="Design interactive landing page mockups",
-                    description="Figma wireframes with hero layout, feature grid, and responsive mobile view.",
-                    assigneeId="user-2",
-                    tags=["design"],
-                    dueDate="2026-09-18",
-                    order=0,
-                    createdAt="2026-09-10T10:00:00Z",
-                    updatedAt="2026-09-10T10:00:00Z",
-                ),
-                Card(
-                    id="card-2",
-                    columnId="col-1",
-                    title="Define WebSocket authentication handshake",
-                    description="Implement JWT token parsing on incoming WebSocket upgrade connections.",
-                    assigneeId="user-1",
-                    tags=["feature", "urgent"],
-                    dueDate="2026-09-14",
-                    order=1,
-                    createdAt="2026-09-10T11:30:00Z",
-                    updatedAt="2026-09-10T11:30:00Z",
-                ),
-                Card(
-                    id="card-3",
-                    columnId="col-2",
-                    title="Real-time card lock broadcast mechanism",
-                    description="Notify peers instantly when someone opens card editing to avoid conflicting edits.",
-                    assigneeId="user-3",
-                    tags=["feature"],
-                    dueDate="2026-09-15",
-                    order=0,
-                    createdAt="2026-09-10T14:00:00Z",
-                    updatedAt="2026-09-10T14:00:00Z",
-                ),
-                Card(
-                    id="card-4",
-                    columnId="col-3",
-                    title="Fix card reorder jitter on high-frequency drag",
-                    description="Apply Last-Write-Wins position resolution with CSS transition dampening.",
-                    assigneeId="user-4",
-                    tags=["bug"],
-                    dueDate="2026-09-12",
-                    order=0,
-                    createdAt="2026-09-09T09:00:00Z",
-                    updatedAt="2026-09-10T16:00:00Z",
-                ),
-                Card(
-                    id="card-5",
-                    columnId="col-4",
-                    title="Project architecture setup and scope sign-off",
-                    description="All functional requirements locked in with client stakeholders.",
-                    assigneeId="user-1",
-                    tags=["docs"],
-                    dueDate="2026-09-11",
-                    order=0,
-                    createdAt="2026-09-08T08:00:00Z",
-                    updatedAt="2026-09-11T09:00:00Z",
-                ),
-            ],
+            owner_id="user-1",
+            invite_token="invite-collab-xyz",
+        )
+        initial_board.members = demo_users
+        db.add(initial_board)
+        db.flush()
+
+        columns = [
+            ColumnDB(id="col-1", board_id="board-demo-1", title="To Do", order=0),
+            ColumnDB(id="col-2", board_id="board-demo-1", title="In Progress", order=1),
+            ColumnDB(id="col-3", board_id="board-demo-1", title="Review", order=2),
+            ColumnDB(id="col-4", board_id="board-demo-1", title="Done", order=3),
+        ]
+        db.add_all(columns)
+        db.flush()
+
+        cards = [
+            CardDB(
+                id="card-1",
+                column_id="col-1",
+                title="Design interactive landing page mockups",
+                description="Figma wireframes with hero layout, feature grid, and responsive mobile view.",
+                assignee_id="user-2",
+                tags=json.dumps(["design"]),
+                due_date="2026-09-18",
+                order=0,
+                created_at="2026-09-10T10:00:00Z",
+                updated_at="2026-09-10T10:00:00Z",
+            ),
+            CardDB(
+                id="card-2",
+                column_id="col-1",
+                title="Define WebSocket authentication handshake",
+                description="Implement JWT token parsing on incoming WebSocket upgrade connections.",
+                assignee_id="user-1",
+                tags=json.dumps(["feature", "urgent"]),
+                due_date="2026-09-14",
+                order=1,
+                created_at="2026-09-10T11:30:00Z",
+                updated_at="2026-09-10T11:30:00Z",
+            ),
+            CardDB(
+                id="card-3",
+                column_id="col-2",
+                title="Real-time card lock broadcast mechanism",
+                description="Notify peers instantly when someone opens card editing to avoid conflicting edits.",
+                assignee_id="user-3",
+                tags=json.dumps(["feature"]),
+                due_date="2026-09-15",
+                order=0,
+                created_at="2026-09-10T14:00:00Z",
+                updated_at="2026-09-10T14:00:00Z",
+            ),
+            CardDB(
+                id="card-4",
+                column_id="col-3",
+                title="Fix card reorder jitter on high-frequency drag",
+                description="Apply Last-Write-Wins position resolution with CSS transition dampening.",
+                assignee_id="user-4",
+                tags=json.dumps(["bug"]),
+                due_date="2026-09-12",
+                order=0,
+                created_at="2026-09-09T09:00:00Z",
+                updated_at="2026-09-10T16:00:00Z",
+            ),
+            CardDB(
+                id="card-5",
+                column_id="col-4",
+                title="Project architecture setup and scope sign-off",
+                description="All functional requirements locked in with client stakeholders.",
+                assignee_id="user-1",
+                tags=json.dumps(["docs"]),
+                due_date="2026-09-11",
+                order=0,
+                created_at="2026-09-08T08:00:00Z",
+                updated_at="2026-09-11T09:00:00Z",
+            ),
+        ]
+        db.add_all(cards)
+        db.commit()
+
+    # --- Conversion Helpers ---
+    def _user_db_to_model(self, u: UserDB) -> User:
+        return User(
+            id=u.id,
+            name=u.name,
+            email=u.email,
+            avatar=u.avatar,
+            color=u.color,
         )
 
-        self.boards[initial_board.id] = initial_board
-        self.card_locks[initial_board.id] = {}
+    def _card_db_to_model(self, c: CardDB) -> Card:
+        tags = []
+        try:
+            tags = json.loads(c.tags)
+        except Exception:
+            pass
+        return Card(
+            id=c.id,
+            columnId=c.column_id,
+            title=c.title,
+            description=c.description or "",
+            assigneeId=c.assignee_id,
+            tags=tags,
+            dueDate=c.due_date,
+            order=c.order,
+            createdAt=c.created_at,
+            updatedAt=c.updated_at,
+        )
 
-    # --- Helpers ---
-    def find_board_by_column(self, column_id: str) -> Optional[Board]:
-        for b in self.boards.values():
-            if any(c.id == column_id for c in b.columns):
-                return b
-        return None
+    def _column_db_to_model(self, col: ColumnDB) -> Column:
+        return Column(
+            id=col.id,
+            boardId=col.board_id,
+            title=col.title,
+            order=col.order,
+        )
 
-    def find_board_by_card(self, card_id: str) -> Optional[Board]:
-        for b in self.boards.values():
-            if any(c.id == card_id for c in b.cards):
-                return b
-        return None
+    def _board_db_to_model(self, b: BoardDB) -> Board:
+        members = [self._user_db_to_model(m) for m in b.members]
+        columns = [self._column_db_to_model(col) for col in sorted(b.columns, key=lambda x: x.order)]
+        all_cards = []
+        for col in b.columns:
+            for card in col.cards:
+                all_cards.append(self._card_db_to_model(card))
+        all_cards.sort(key=lambda x: x.order)
+        return Board(
+            id=b.id,
+            title=b.title,
+            description=b.description,
+            ownerId=b.owner_id,
+            inviteToken=b.invite_token,
+            members=members,
+            columns=columns,
+            cards=all_cards,
+        )
 
     # --- Users ---
     def get_user(self, user_id: str) -> Optional[User]:
-        u = self.users.get(user_id)
-        if u:
-            return User(**u.model_dump())
-        return None
+        with SessionLocal() as db:
+            u = db.query(UserDB).filter(UserDB.id == user_id).first()
+            if u:
+                return self._user_db_to_model(u)
+            return None
 
     def get_user_in_db_by_email(self, email: str) -> Optional[UserInDB]:
-        for u in self.users.values():
-            if u.email.lower() == email.lower():
-                return u
-        return None
+        with SessionLocal() as db:
+            u = db.query(UserDB).filter(UserDB.email.ilike(email.strip())).first()
+            if u:
+                return UserInDB(
+                    id=u.id,
+                    name=u.name,
+                    email=u.email,
+                    avatar=u.avatar,
+                    color=u.color,
+                    hashed_password=u.hashed_password,
+                )
+            return None
 
     def create_user(self, email: str, name: Optional[str] = None, password: Optional[str] = None) -> User:
-        user_id = f"user-{int(time.time() * 1000)}"
-        display_name = name or email.split("@")[0]
-        hashed = get_password_hash(password or "password123")
-        new_u = UserInDB(
-            id=user_id,
-            name=display_name,
-            email=email,
-            avatar="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80",
-            color="#06b6d4",
-            hashed_password=hashed,
-        )
-        self.users[user_id] = new_u
-        return User(**new_u.model_dump())
+        with SessionLocal() as db:
+            user_id = f"user-{int(time.time() * 1000)}"
+            display_name = name or email.split("@")[0]
+            hashed = get_password_hash(password or "password123")
+            colors = ["#3b82f6", "#10b981", "#8b5cf6", "#f59e0b", "#ec4899", "#06b6d4"]
+            color = colors[int(time.time()) % len(colors)]
+            new_u = UserDB(
+                id=user_id,
+                name=display_name,
+                email=email.strip().lower(),
+                avatar=f"https://api.dicebear.com/7.x/bottts/svg?seed={display_name}",
+                color=color,
+                hashed_password=hashed,
+            )
+            db.add(new_u)
+            db.commit()
+            return self._user_db_to_model(new_u)
 
     def list_demo_users(self) -> List[User]:
-        return [User(**u.model_dump()) for u in self.users.values() if u.id.startswith("user-")]
+        with SessionLocal() as db:
+            users = db.query(UserDB).filter(UserDB.id.like("user-%")).all()
+            return [self._user_db_to_model(u) for u in users]
 
     # --- Boards ---
     def list_boards(self, user_id: str) -> List[Board]:
-        return [
-            b for b in self.boards.values()
-            if any(m.id == user_id for m in b.members) or b.ownerId == user_id
-        ]
+        with SessionLocal() as db:
+            boards = (
+                db.query(BoardDB)
+                .filter((BoardDB.owner_id == user_id) | BoardDB.members.any(UserDB.id == user_id))
+                .all()
+            )
+            return [self._board_db_to_model(b) for b in boards]
 
     def get_board(self, board_id: str) -> Optional[Board]:
-        return self.boards.get(board_id)
+        with SessionLocal() as db:
+            b = db.query(BoardDB).filter(BoardDB.id == board_id).first()
+            if b:
+                return self._board_db_to_model(b)
+            return None
 
     def create_board(self, title: str, description: Optional[str], owner: User) -> Board:
-        b_id = f"board-{int(time.time() * 1000)}"
-        new_board = Board(
-            id=b_id,
-            title=title,
-            description=description,
-            ownerId=owner.id,
-            inviteToken=f"invite-{int(time.time())}",
-            members=[owner],
-            columns=[
-                Column(id=f"col-{b_id}-1", boardId=b_id, title="To Do", order=0),
-                Column(id=f"col-{b_id}-2", boardId=b_id, title="In Progress", order=1),
-                Column(id=f"col-{b_id}-3", boardId=b_id, title="Done", order=2),
-            ],
-            cards=[],
-        )
-        self.boards[b_id] = new_board
-        self.card_locks[b_id] = {}
-        return new_board
+        with SessionLocal() as db:
+            b_id = f"board-{int(time.time() * 1000)}"
+            owner_db = db.query(UserDB).filter(UserDB.id == owner.id).first()
+            new_board = BoardDB(
+                id=b_id,
+                title=title,
+                description=description,
+                owner_id=owner.id,
+                invite_token=f"invite-{int(time.time())}",
+            )
+            if owner_db:
+                new_board.members.append(owner_db)
+            db.add(new_board)
+            db.flush()
+
+            columns = [
+                ColumnDB(id=f"col-{b_id}-1", board_id=b_id, title="To Do", order=0),
+                ColumnDB(id=f"col-{b_id}-2", board_id=b_id, title="In Progress", order=1),
+                ColumnDB(id=f"col-{b_id}-3", board_id=b_id, title="Done", order=2),
+            ]
+            db.add_all(columns)
+            db.commit()
+            db.refresh(new_board)
+            return self._board_db_to_model(new_board)
 
     def join_board_by_token(self, token: str, user: User) -> Optional[Board]:
-        for b in self.boards.values():
-            if b.inviteToken == token or b.id == token:
-                if not any(m.id == user.id for m in b.members):
-                    b.members.append(user)
-                return b
-        return None
+        with SessionLocal() as db:
+            b = db.query(BoardDB).filter((BoardDB.invite_token == token) | (BoardDB.id == token)).first()
+            if not b:
+                return None
+            user_db = db.query(UserDB).filter(UserDB.id == user.id).first()
+            if user_db and not any(m.id == user.id for m in b.members):
+                b.members.append(user_db)
+                db.commit()
+                db.refresh(b)
+            return self._board_db_to_model(b)
 
     # --- Columns ---
     def create_column(self, board_id: str, title: str) -> Optional[Column]:
-        board = self.boards.get(board_id)
-        if not board:
-            return None
-        col_id = f"col-{int(time.time() * 1000)}"
-        col = Column(
-            id=col_id,
-            boardId=board_id,
-            title=title,
-            order=len(board.columns),
-        )
-        board.columns.append(col)
-        return col
+        with SessionLocal() as db:
+            board = db.query(BoardDB).filter(BoardDB.id == board_id).first()
+            if not board:
+                return None
+            col_id = f"col-{int(time.time() * 1000)}"
+            col_order = len(board.columns)
+            new_col = ColumnDB(id=col_id, board_id=board_id, title=title, order=col_order)
+            db.add(new_col)
+            db.commit()
+            db.refresh(new_col)
+            return self._column_db_to_model(new_col)
 
     def update_column(self, column_id: str, title: str) -> Optional[Tuple[Column, str]]:
-        for board in self.boards.values():
-            for col in board.columns:
-                if col.id == column_id:
-                    col.title = title
-                    return col, board.id
-        return None
+        with SessionLocal() as db:
+            col = db.query(ColumnDB).filter(ColumnDB.id == column_id).first()
+            if not col:
+                return None
+            col.title = title
+            board_id = col.board_id
+            db.commit()
+            db.refresh(col)
+            return self._column_db_to_model(col), board_id
 
     def delete_column(self, column_id: str) -> Optional[str]:
-        for board in self.boards.values():
-            for idx, col in enumerate(board.columns):
-                if col.id == column_id:
-                    board.columns.pop(idx)
-                    board.cards = [c for c in board.cards if c.columnId != column_id]
-                    return board.id
-        return None
+        with SessionLocal() as db:
+            col = db.query(ColumnDB).filter(ColumnDB.id == column_id).first()
+            if not col:
+                return None
+            board_id = col.board_id
+            db.delete(col)
+            db.commit()
+            return board_id
 
     def reorder_columns(self, board_id: str, column_ids: List[str]) -> Optional[List[Column]]:
-        board = self.boards.get(board_id)
-        if not board:
-            return None
-        col_map = {c.id: c for c in board.columns}
-        reordered = []
-        for idx, cid in enumerate(column_ids):
-            if cid in col_map:
-                col = col_map[cid]
-                col.order = idx
-                reordered.append(col)
-        board.columns = reordered
-        return reordered
+        with SessionLocal() as db:
+            board = db.query(BoardDB).filter(BoardDB.id == board_id).first()
+            if not board:
+                return None
+            for idx, cid in enumerate(column_ids):
+                col = db.query(ColumnDB).filter(ColumnDB.id == cid, ColumnDB.board_id == board_id).first()
+                if col:
+                    col.order = idx
+            db.commit()
+            db.refresh(board)
+            return [self._column_db_to_model(c) for c in sorted(board.columns, key=lambda x: x.order)]
 
     # --- Cards ---
     def create_card(
@@ -282,67 +374,93 @@ class InMemoryStore:
         due_date: Optional[str],
         order: Optional[int],
     ) -> Optional[Tuple[Card, str]]:
-        for board in self.boards.values():
-            if any(c.id == column_id for c in board.columns):
-                col_cards = [c for c in board.cards if c.columnId == column_id]
-                now_str = datetime.datetime.now(datetime.timezone.utc).isoformat()
-                card_order = order if order is not None else len(col_cards)
-                new_card = Card(
-                    id=f"card-{int(time.time() * 1000)}",
-                    columnId=column_id,
-                    title=title,
-                    description=description or "",
-                    assigneeId=assignee_id,
-                    tags=tags or ["feature"],
-                    dueDate=due_date,
-                    order=card_order,
-                    createdAt=now_str,
-                    updatedAt=now_str,
-                )
-                board.cards.append(new_card)
-                return new_card, board.id
-        return None
+        with SessionLocal() as db:
+            col = db.query(ColumnDB).filter(ColumnDB.id == column_id).first()
+            if not col:
+                return None
+            board_id = col.board_id
+            now_str = datetime.datetime.now(datetime.timezone.utc).isoformat()
+            card_order = order if order is not None else len(col.cards)
+            new_card = CardDB(
+                id=f"card-{int(time.time() * 1000)}",
+                column_id=column_id,
+                title=title,
+                description=description or "",
+                assignee_id=assignee_id,
+                tags=json.dumps(tags or ["feature"]),
+                due_date=due_date,
+                order=card_order,
+                created_at=now_str,
+                updated_at=now_str,
+            )
+            db.add(new_card)
+            db.commit()
+            db.refresh(new_card)
+            return self._card_db_to_model(new_card), board_id
 
     def update_card(self, card_id: str, updates: dict) -> Optional[Tuple[Card, str]]:
-        for board in self.boards.values():
-            for card in board.cards:
-                if card.id == card_id:
-                    for k, v in updates.items():
-                        if hasattr(card, k):
-                            setattr(card, k, v)
-                    card.updatedAt = datetime.datetime.now(datetime.timezone.utc).isoformat()
-                    return card, board.id
-        return None
+        with SessionLocal() as db:
+            card = db.query(CardDB).filter(CardDB.id == card_id).first()
+            if not card:
+                return None
+            board_id = card.column.board_id
+            for k, v in updates.items():
+                if k == "tags" and isinstance(v, list):
+                    card.tags = json.dumps(v)
+                elif k == "assigneeId":
+                    card.assignee_id = v
+                elif k == "dueDate":
+                    card.due_date = v
+                elif hasattr(card, k):
+                    setattr(card, k, v)
+            card.updated_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
+            db.commit()
+            db.refresh(card)
+            return self._card_db_to_model(card), board_id
 
     def move_card(self, card_id: str, target_column_id: str, new_order: int) -> Optional[Tuple[Card, str]]:
-        for board in self.boards.values():
-            target_card = next((c for c in board.cards if c.id == card_id), None)
-            if target_card:
-                target_card.columnId = target_column_id
-                target_card.order = new_order
-                target_card.updatedAt = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        with SessionLocal() as db:
+            card = db.query(CardDB).filter(CardDB.id == card_id).first()
+            if not card:
+                return None
+            target_col = db.query(ColumnDB).filter(ColumnDB.id == target_column_id).first()
+            if not target_col:
+                return None
+            board_id = target_col.board_id
+            card.column_id = target_column_id
+            card.order = new_order
+            card.updated_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
-                # Reorder cards in target column
-                col_cards = [c for c in board.cards if c.columnId == target_column_id and c.id != card_id]
-                col_cards.sort(key=lambda x: x.order)
-                col_cards.insert(new_order, target_card)
-                for idx, c in enumerate(col_cards):
-                    c.order = idx
-                return target_card, board.id
-        return None
+            # Reorder other cards in target column
+            target_cards = (
+                db.query(CardDB)
+                .filter(CardDB.column_id == target_column_id, CardDB.id != card_id)
+                .order_by(CardDB.order)
+                .all()
+            )
+            target_cards.insert(new_order, card)
+            for idx, c in enumerate(target_cards):
+                c.order = idx
+
+            db.commit()
+            db.refresh(card)
+            return self._card_db_to_model(card), board_id
 
     def delete_card(self, card_id: str) -> Optional[str]:
-        for board in self.boards.values():
-            for idx, c in enumerate(board.cards):
-                if c.id == card_id:
-                    board.cards.pop(idx)
-                    # Clean up any lock for this card
-                    if board.id in self.card_locks and card_id in self.card_locks[board.id]:
-                        del self.card_locks[board.id][card_id]
-                    return board.id
-        return None
+        with SessionLocal() as db:
+            card = db.query(CardDB).filter(CardDB.id == card_id).first()
+            if not card:
+                return None
+            board_id = card.column.board_id
+            db.delete(card)
+            db.commit()
 
-    # --- Locks ---
+            # Clean up ephemeral lock for this card
+            if board_id in self.card_locks and card_id in self.card_locks[board_id]:
+                del self.card_locks[board_id][card_id]
+            return board_id
+
+    # --- Ephemeral Locks ---
     def get_board_locks(self, board_id: str) -> List[CardLock]:
         locks = self.card_locks.get(board_id, {})
         now = int(time.time() * 1000)
@@ -398,4 +516,4 @@ class InMemoryStore:
             for ws in dead:
                 self.active_connections[board_id].discard(ws)
 
-store = InMemoryStore()
+store = DatabaseStore()

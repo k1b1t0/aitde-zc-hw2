@@ -3,8 +3,10 @@ import {
   Check,
   ChevronDown,
   Link,
-  Sparkles,
+  LogIn,
+  LogOut,
   Terminal,
+  UserCheck,
   Wifi,
   WifiOff,
 } from 'lucide-react'
@@ -13,15 +15,15 @@ import { useBoard } from '../context/BoardContext'
 
 interface NavbarProps {
   onOpenInvite: () => void
+  onOpenAuth: () => void
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ onOpenInvite }) => {
-  const { currentUser, demoUsers, switchUser } = useAuth()
+export const Navbar: React.FC<NavbarProps> = ({ onOpenInvite, onOpenAuth }) => {
+  const { currentUser, demoUsers, switchUser, logout } = useAuth()
   const {
     board,
     connectionStatus,
     toggleSimulatedDisconnect,
-    simulatePeerActivity,
   } = useBoard()
   const [showUserDropdown, setShowUserDropdown] = useState(false)
 
@@ -240,6 +242,54 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenInvite }) => {
                   {user.id === currentUser?.id && <Check size={14} color="var(--accent-primary)" />}
                 </button>
               ))}
+
+              <div style={{ borderTop: '1px solid var(--border-color)', marginTop: '0.4rem', paddingTop: '0.4rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                <button
+                  onClick={() => {
+                    setShowUserDropdown(false)
+                    onOpenAuth()
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    padding: '0.35rem 0.5rem',
+                    backgroundColor: 'transparent',
+                    border: '1px dashed var(--accent-cyan)',
+                    color: 'var(--accent-cyan)',
+                    fontSize: '0.74rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    fontFamily: 'var(--font-family)',
+                  }}
+                >
+                  <LogIn size={13} />
+                  <span>LOGIN / SIGN_UP</span>
+                </button>
+
+                <button
+                  onClick={async () => {
+                    setShowUserDropdown(false)
+                    await logout()
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    padding: '0.35rem 0.5rem',
+                    backgroundColor: 'transparent',
+                    border: '1px dashed var(--danger)',
+                    color: 'var(--danger)',
+                    fontSize: '0.74rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    fontFamily: 'var(--font-family)',
+                  }}
+                >
+                  <LogOut size={13} />
+                  <span>LOGOUT_SESSION</span>
+                </button>
+              </div>
             </div>
           )}
         </div>

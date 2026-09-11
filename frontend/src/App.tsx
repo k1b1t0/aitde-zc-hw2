@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { AuthModal } from './components/AuthModal'
 import { BoardView } from './components/BoardView'
 import { InviteModal } from './components/InviteModal'
 import { Navbar } from './components/Navbar'
@@ -7,6 +8,7 @@ import { BoardProvider } from './context/BoardContext'
 
 export const App: React.FC = () => {
   const [showInviteModal, setShowInviteModal] = useState(false)
+  const [showAuthModal, setShowAuthModal] = useState(false)
 
   return (
     <AuthProvider>
@@ -19,9 +21,13 @@ export const App: React.FC = () => {
             backgroundColor: 'var(--bg-primary)',
           }}
         >
-          <Navbar onOpenInvite={() => setShowInviteModal(true)} />
+          <Navbar
+            onOpenInvite={() => setShowInviteModal(true)}
+            onOpenAuth={() => setShowAuthModal(true)}
+          />
           <BoardView />
           {showInviteModal && <InviteModal onClose={() => setShowInviteModal(false)} />}
+          {showAuthModal && <AuthModal onClose={() => setShowAuthModal(false)} />}
         </div>
       </BoardProvider>
     </AuthProvider>

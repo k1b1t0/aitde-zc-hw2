@@ -1,12 +1,21 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.routers import auth, boards, cards, columns, realtime
+from app.store import store
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Initialize database tables and seed demo data if empty
+    store.init_db()
+    yield
 
 app = FastAPI(
     title="Mini Collaborative Kanban API",
     description="FastAPI implementation of the Mini Collaborative Kanban backend spec",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 # Enable CORS for frontend requests
