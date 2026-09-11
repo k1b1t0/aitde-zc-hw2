@@ -423,6 +423,19 @@ export class BackendKanbanService implements KanbanService {
     }
   }
 
+  sendTypingStopped(boardId: string, cardId: string): void {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN && this.currentUser) {
+      const msg: WebSocketMessage = {
+        type: 'TYPING_STOPPED',
+        boardId,
+        senderId: this.currentUser.id,
+        payload: { cardId },
+        timestamp: Date.now(),
+      }
+      this.ws.send(JSON.stringify(msg))
+    }
+  }
+
   async triggerSimulatedPeerActivity(boardId: string): Promise<void> {
     // Switch to peer and stream typing over WebSocket
     const peer = this.getDemoUsers().find((u) => u.id !== this.currentUser?.id)

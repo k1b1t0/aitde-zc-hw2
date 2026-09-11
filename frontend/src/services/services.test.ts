@@ -101,4 +101,17 @@ describe('MockKanbanService', () => {
     mockKanbanService.toggleSimulatedDisconnect(false)
     expect(mockKanbanService.getConnectionStatus()).toBe('connected')
   })
+
+  it('should broadcast TYPING_STOPPED when sendTypingStopped is called', () => {
+    const subscriber = vi.fn()
+    const unsubscribe = mockKanbanService.subscribeToBoard('board-demo-1', subscriber)
+
+    mockKanbanService.sendTypingStopped('board-demo-1', 'card-1')
+    expect(subscriber).toHaveBeenCalled()
+    const lastCall = subscriber.mock.calls[subscriber.mock.calls.length - 1][0]
+    expect(lastCall.type).toBe('TYPING_STOPPED')
+    expect(lastCall.payload.cardId).toBe('card-1')
+
+    unsubscribe()
+  })
 })

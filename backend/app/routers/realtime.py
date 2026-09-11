@@ -19,14 +19,31 @@ def get_card_locks(board_id: str, current_user: User = Depends(get_current_user)
     return store.get_board_locks(board_id)
 
 @router.post("/boards/{board_id}/cards/{card_id}/lock", response_model=AcquireLockResponse)
-def acquire_card_lock(board_id: str, card_id: str, current_user: User = Depends(get_current_user)):
+async def acquire_card_lock(board_id: str, card_id: str, current_user: User = Depends(get_current_user)):
     acquired = store.acquire_lock(board_id, card_id, current_user)
     lock = next((l for l in store.get_board_locks(board_id) if l.cardId == card_id), None)
+    if acquired and lock:
+        msg = WebSocketMessage(
+            type="CARD_LOCKED",
+            boardId=board_id,
+            senderId=current_user.id,
+            payload={"lock": lock.model_dump()},
+            timestamp=int(time.time() * 1000),
+        )
+        await store.broadcast_to_board(board_id, msg)
     return AcquireLockResponse(acquired=acquired, lock=lock)
 
 @router.delete("/boards/{board_id}/cards/{card_id}/lock", status_code=status.HTTP_204_NO_CONTENT)
-def release_card_lock(board_id: str, card_id: str, current_user: User = Depends(get_current_user)):
+async def release_card_lock(board_id: str, card_id: str, current_user: User = Depends(get_current_user)):
     store.release_lock(board_id, card_id)
+    msg = WebSocketMessage(
+        type="CARD_UNLOCKED",
+        boardId=board_id,
+        senderId=current_user.id,
+        payload={"cardId": card_id},
+        timestamp=int(time.time() * 1000),
+    )
+    await store.broadcast_to_board(board_id, msg)
     return None
 
 @router.websocket("/ws/boards/{board_id}")
@@ -59,6 +76,8 @@ async def board_websocket(websocket: WebSocket, board_id: str, token: str = Quer
             data = await websocket.receive_text()
             msg_dict = json.loads(data)
             ws_msg = WebSocketMessage(**msg_dict)
+            # Update sender in case client sent it
+            ws_msg.senderId = user.id
             # Forward / broadcast incoming events (e.g. LIVE_TYPING) to room peers
             await store.broadcast_to_board(board_id, ws_msg)
     except WebSocketDisconnect:

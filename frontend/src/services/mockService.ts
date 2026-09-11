@@ -479,6 +479,12 @@ export class MockKanbanService implements KanbanService {
         board.cards.splice(index, 1)
         this.persist()
 
+        // Release any locks
+        const boardLocks = this.cardLocks.get(board.id)
+        if (boardLocks && boardLocks.has(cardId)) {
+          boardLocks.delete(cardId)
+        }
+
         this.broadcast(board.id, {
           type: 'CARD_DELETED',
           boardId: board.id,
@@ -486,6 +492,15 @@ export class MockKanbanService implements KanbanService {
           payload: { cardId },
           timestamp: Date.now(),
         })
+
+        this.broadcast(board.id, {
+          type: 'CARD_UNLOCKED',
+          boardId: board.id,
+          senderId: this.currentUser.id,
+          payload: { cardId },
+          timestamp: Date.now(),
+        })
+
         return
       }
     }
@@ -611,6 +626,16 @@ export class MockKanbanService implements KanbanService {
         card.updatedAt = new Date().toISOString()
       }
     }
+  }
+
+  sendTypingStopped(boardId: string, cardId: string): void {
+    this.broadcast(boardId, {
+      type: 'TYPING_STOPPED',
+      boardId,
+      senderId: this.currentUser.id,
+      payload: { cardId },
+      timestamp: Date.now(),
+    })
   }
 
   // Demo tool: simulate a teammate (e.g. Sarah) typing or moving a card in real-time!

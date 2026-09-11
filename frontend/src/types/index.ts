@@ -53,6 +53,7 @@ export interface LiveTypingEvent {
   userName: string
   field: 'title' | 'description'
   value: string
+  stopped?: boolean
 }
 
 export type ConnectionStatus = 'connected' | 'connecting' | 'disconnected'
@@ -71,6 +72,7 @@ export type WebSocketEventType =
   | 'CARD_LOCKED'
   | 'CARD_UNLOCKED'
   | 'LIVE_TYPING'
+  | 'TYPING_STOPPED'
   | 'BOARD_RESET'
 
 export interface WebSocketMessage<T = any> {

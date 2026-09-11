@@ -49,6 +49,7 @@ export interface KanbanService {
   
   // Live Typing
   sendLiveTyping(boardId: string, typing: LiveTypingEvent): void
+  sendTypingStopped(boardId: string, cardId: string): void
   
   // Peer simulation (for demo testing live sync)
   triggerSimulatedPeerActivity(boardId: string): Promise<void>

@@ -11,6 +11,13 @@ export const BoardView: React.FC = () => {
   const [isAddingColumn, setIsAddingColumn] = useState(false)
   const [newColumnTitle, setNewColumnTitle] = useState('')
 
+  // If currently selected card was deleted by a peer, dismiss the modal cleanly
+  React.useEffect(() => {
+    if (selectedCard && board && !board.cards.some((c) => c.id === selectedCard.id)) {
+      setSelectedCard(null)
+    }
+  }, [selectedCard, board?.cards])
+
   const handleAddColumnSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newColumnTitle.trim()) return

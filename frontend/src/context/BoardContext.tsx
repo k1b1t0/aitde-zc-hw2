@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useState } from 'react'
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { getKanbanService } from '../services'
 import {
   Board,
@@ -28,6 +28,7 @@ interface BoardContextType {
   acquireLock: (cardId: string) => Promise<boolean>
   releaseLock: (cardId: string) => Promise<void>
   sendTyping: (cardId: string, field: 'title' | 'description', value: string) => void
+  sendTypingStopped: (cardId: string) => void
   toggleSimulatedDisconnect: () => void
   simulatePeerActivity: () => void
   refreshBoard: () => Promise<void>
@@ -45,6 +46,7 @@ export const BoardProvider: React.FC<{ boardId?: string; children: React.ReactNo
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('connected')
   const [cardLocks, setCardLocks] = useState<CardLock[]>([])
   const [activeTyping, setActiveTyping] = useState<Record<string, LiveTypingEvent>>({})
+  const typingTimeoutsRef = useRef<Record<string, any>>({})
 
   const service = getKanbanService()
 
@@ -119,6 +121,12 @@ export const BoardProvider: React.FC<{ boardId?: string; children: React.ReactNo
             if (!prev) return prev
             return { ...prev, cards: prev.cards.filter((c) => c.id !== msg.payload.cardId) }
           })
+          setCardLocks((prev) => prev.filter((l) => l.cardId !== msg.payload.cardId))
+          setActiveTyping((prev) => {
+            const copy = { ...prev }
+            delete copy[msg.payload.cardId]
+            return copy
+          })
           break
 
         case 'COLUMN_CREATED':
@@ -180,9 +188,39 @@ export const BoardProvider: React.FC<{ boardId?: string; children: React.ReactNo
           })
           break
 
+        case 'TYPING_STOPPED':
+          setActiveTyping((prev) => {
+            const copy = { ...prev }
+            delete copy[msg.payload.cardId]
+            return copy
+          })
+          break
+
         case 'LIVE_TYPING': {
           const typing: LiveTypingEvent = msg.payload.typing
+          if (typing.stopped) {
+            setActiveTyping((prev) => {
+              const copy = { ...prev }
+              delete copy[typing.cardId]
+              return copy
+            })
+            break
+          }
+
           setActiveTyping((prev) => ({ ...prev, [typing.cardId]: typing }))
+
+          // Auto-expire typing status after 3.5 seconds of inactivity
+          if (typingTimeoutsRef.current[typing.cardId]) {
+            clearTimeout(typingTimeoutsRef.current[typing.cardId])
+          }
+          typingTimeoutsRef.current[typing.cardId] = setTimeout(() => {
+            setActiveTyping((prev) => {
+              const copy = { ...prev }
+              delete copy[typing.cardId]
+              return copy
+            })
+          }, 3500)
+
           // Also update card in local state if sender is peer
           if (currentUser && msg.senderId !== currentUser.id) {
             setBoard((prev) => {
@@ -321,6 +359,17 @@ export const BoardProvider: React.FC<{ boardId?: string; children: React.ReactNo
     })
   }
 
+  const sendTypingStopped = (cardId: string) => {
+    if (!board) return
+    // Also clear locally for myself
+    setActiveTyping((prev) => {
+      const copy = { ...prev }
+      delete copy[cardId]
+      return copy
+    })
+    service.sendTypingStopped(board.id, cardId)
+  }
+
   const toggleSimulatedDisconnect = () => {
     service.toggleSimulatedDisconnect()
   }
@@ -349,6 +398,7 @@ export const BoardProvider: React.FC<{ boardId?: string; children: React.ReactNo
         acquireLock,
         releaseLock,
         sendTyping,
+        sendTypingStopped,
         toggleSimulatedDisconnect,
         simulatePeerActivity,
         refreshBoard: loadBoardData,

@@ -22,6 +22,7 @@ export const CardModal: React.FC<CardModalProps> = ({ card, onClose }) => {
     acquireLock,
     releaseLock,
     sendTyping,
+    sendTypingStopped,
   } = useBoard()
 
   const [title, setTitle] = useState('')
@@ -30,13 +31,22 @@ export const CardModal: React.FC<CardModalProps> = ({ card, onClose }) => {
   const [tags, setTags] = useState<CardTag[]>([])
   const [dueDate, setDueDate] = useState<string | undefined>(undefined)
 
+  // Track if card was deleted while modal is open
+  const cardStillExists = Boolean(card && board?.cards.some((c) => c.id === card.id))
+
+  useEffect(() => {
+    if (card && !cardStillExists) {
+      onClose()
+    }
+  }, [card, cardStillExists, onClose])
+
   // Peer lock detection
   const currentLock = card ? cardLocks.find((l) => l.cardId === card.id) : null
   const isLockedByPeer = currentLock && currentLock.userId !== currentUser?.id
   const peerTyping = card ? activeTyping[card.id] : null
   const isPeerTyping = peerTyping && peerTyping.userId !== currentUser?.id
 
-  // Synchronize state from card
+  // Synchronize state when card is opened or refreshed from board
   useEffect(() => {
     if (card) {
       setTitle(card.title)
@@ -50,10 +60,20 @@ export const CardModal: React.FC<CardModalProps> = ({ card, onClose }) => {
 
     return () => {
       if (card) {
+        sendTypingStopped(card.id)
         releaseLock(card.id)
       }
     }
   }, [card?.id])
+
+  // If card props update from live WebSocket updates (e.g. peer changed tags, assignee, or dueDate)
+  useEffect(() => {
+    if (card) {
+      setAssigneeId(card.assigneeId)
+      setTags(card.tags || [])
+      setDueDate(card.dueDate || '')
+    }
+  }, [card?.assigneeId, card?.dueDate, JSON.stringify(card?.tags)])
 
   // If peer is live typing on this card while modal is open, reflect streamed value
   useEffect(() => {
@@ -63,7 +83,7 @@ export const CardModal: React.FC<CardModalProps> = ({ card, onClose }) => {
     }
   }, [peerTyping?.value])
 
-  if (!card) return null
+  if (!card || !cardStillExists) return null
 
   // Live Typing Handlers
   const handleTitleChange = (newTitle: string) => {
@@ -76,7 +96,15 @@ export const CardModal: React.FC<CardModalProps> = ({ card, onClose }) => {
     sendTyping(card.id, 'description', newDesc)
   }
 
+  // Pure Exit / Cancel without saving
+  const handleExitAndClose = () => {
+    sendTypingStopped(card.id)
+    releaseLock(card.id)
+    onClose()
+  }
+
   const handleSaveAndClose = async () => {
+    sendTypingStopped(card.id)
     await updateCard(card.id, {
       title: title.trim() || card.title,
       description: description.trim(),
@@ -84,6 +112,7 @@ export const CardModal: React.FC<CardModalProps> = ({ card, onClose }) => {
       tags,
       dueDate: dueDate || undefined,
     })
+    releaseLock(card.id)
     onClose()
   }
 
@@ -105,7 +134,7 @@ export const CardModal: React.FC<CardModalProps> = ({ card, onClose }) => {
         zIndex: 1000,
         padding: '1rem',
       }}
-      onClick={handleSaveAndClose}
+      onClick={handleExitAndClose}
     >
       <div
         onClick={(e) => e.stopPropagation()}
@@ -173,7 +202,8 @@ export const CardModal: React.FC<CardModalProps> = ({ card, onClose }) => {
             )}
 
             <button
-              onClick={handleSaveAndClose}
+              onClick={handleExitAndClose}
+              title="Close without saving"
               style={{
                 background: 'none',
                 border: '1px solid var(--border-color)',
@@ -351,6 +381,8 @@ export const CardModal: React.FC<CardModalProps> = ({ card, onClose }) => {
         >
           <button
             onClick={async () => {
+              sendTypingStopped(card.id)
+              releaseLock(card.id)
               await deleteCard(card.id)
               onClose()
             }}
@@ -362,12 +394,20 @@ export const CardModal: React.FC<CardModalProps> = ({ card, onClose }) => {
             <span>DROP_RECORD</span>
           </button>
 
-          <button
-            onClick={handleSaveAndClose}
-            className="retro-btn retro-btn-primary"
-          >
-            WRITE_TO_DISK (SAVE)
-          </button>
+          <div style={{ display: 'flex', gap: '0.6rem' }}>
+            <button
+              onClick={handleExitAndClose}
+              className="retro-btn"
+            >
+              DISCARD_CHANGES
+            </button>
+            <button
+              onClick={handleSaveAndClose}
+              className="retro-btn retro-btn-primary"
+            >
+              WRITE_TO_DISK (SAVE)
+            </button>
+          </div>
         </div>
       </div>
     </div>

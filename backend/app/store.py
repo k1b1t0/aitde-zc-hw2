@@ -1,6 +1,6 @@
 import time
 import datetime
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional, Set, Tuple
 from fastapi import WebSocket
 
 from app.auth import get_password_hash
@@ -143,6 +143,19 @@ class InMemoryStore:
         self.boards[initial_board.id] = initial_board
         self.card_locks[initial_board.id] = {}
 
+    # --- Helpers ---
+    def find_board_by_column(self, column_id: str) -> Optional[Board]:
+        for b in self.boards.values():
+            if any(c.id == column_id for c in b.columns):
+                return b
+        return None
+
+    def find_board_by_card(self, card_id: str) -> Optional[Board]:
+        for b in self.boards.values():
+            if any(c.id == card_id for c in b.cards):
+                return b
+        return None
+
     # --- Users ---
     def get_user(self, user_id: str) -> Optional[User]:
         u = self.users.get(user_id)
@@ -227,22 +240,22 @@ class InMemoryStore:
         board.columns.append(col)
         return col
 
-    def update_column(self, column_id: str, title: str) -> Optional[Column]:
+    def update_column(self, column_id: str, title: str) -> Optional[Tuple[Column, str]]:
         for board in self.boards.values():
             for col in board.columns:
                 if col.id == column_id:
                     col.title = title
-                    return col
+                    return col, board.id
         return None
 
-    def delete_column(self, column_id: str) -> bool:
+    def delete_column(self, column_id: str) -> Optional[str]:
         for board in self.boards.values():
             for idx, col in enumerate(board.columns):
                 if col.id == column_id:
                     board.columns.pop(idx)
                     board.cards = [c for c in board.cards if c.columnId != column_id]
-                    return True
-        return False
+                    return board.id
+        return None
 
     def reorder_columns(self, board_id: str, column_ids: List[str]) -> Optional[List[Column]]:
         board = self.boards.get(board_id)
@@ -268,7 +281,7 @@ class InMemoryStore:
         tags: List[str],
         due_date: Optional[str],
         order: Optional[int],
-    ) -> Optional[Card]:
+    ) -> Optional[Tuple[Card, str]]:
         for board in self.boards.values():
             if any(c.id == column_id for c in board.columns):
                 col_cards = [c for c in board.cards if c.columnId == column_id]
@@ -287,21 +300,21 @@ class InMemoryStore:
                     updatedAt=now_str,
                 )
                 board.cards.append(new_card)
-                return new_card
+                return new_card, board.id
         return None
 
-    def update_card(self, card_id: str, updates: dict) -> Optional[Card]:
+    def update_card(self, card_id: str, updates: dict) -> Optional[Tuple[Card, str]]:
         for board in self.boards.values():
             for card in board.cards:
                 if card.id == card_id:
                     for k, v in updates.items():
-                        if v is not None and hasattr(card, k):
+                        if hasattr(card, k):
                             setattr(card, k, v)
                     card.updatedAt = datetime.datetime.now(datetime.timezone.utc).isoformat()
-                    return card
+                    return card, board.id
         return None
 
-    def move_card(self, card_id: str, target_column_id: str, new_order: int) -> Optional[Card]:
+    def move_card(self, card_id: str, target_column_id: str, new_order: int) -> Optional[Tuple[Card, str]]:
         for board in self.boards.values():
             target_card = next((c for c in board.cards if c.id == card_id), None)
             if target_card:
@@ -315,16 +328,19 @@ class InMemoryStore:
                 col_cards.insert(new_order, target_card)
                 for idx, c in enumerate(col_cards):
                     c.order = idx
-                return target_card
+                return target_card, board.id
         return None
 
-    def delete_card(self, card_id: str) -> bool:
+    def delete_card(self, card_id: str) -> Optional[str]:
         for board in self.boards.values():
             for idx, c in enumerate(board.cards):
                 if c.id == card_id:
                     board.cards.pop(idx)
-                    return True
-        return False
+                    # Clean up any lock for this card
+                    if board.id in self.card_locks and card_id in self.card_locks[board.id]:
+                        del self.card_locks[board.id][card_id]
+                    return board.id
+        return None
 
     # --- Locks ---
     def get_board_locks(self, board_id: str) -> List[CardLock]:
@@ -369,7 +385,7 @@ class InMemoryStore:
         if board_id in self.active_connections:
             dead = set()
             json_str = message.model_dump_json()
-            for ws in self.active_connections[board_id]:
+            for ws in list(self.active_connections[board_id]):
                 try:
                     await ws.send_text(json_str)
                 except Exception:
