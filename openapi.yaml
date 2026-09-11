@@ -1,0 +1,1159 @@
+openapi: 3.0.3
+info:
+  title: Mini Collaborative Kanban API
+  description: >-
+    Backend REST and WebSocket specification for the Mini Collaborative Kanban
+    application. Supports board, column, and card management with real-time
+    bidirectional sync, character-level live typing, card locks, and team collaboration.
+  version: 1.0.0
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Local development backend server
+
+tags:
+  - name: Auth
+    description: User authentication, profiles, and demo persona switching
+  - name: Boards
+    description: Board creation, membership, and invite links
+  - name: Columns
+    description: Column lifecycle and ordering
+  - name: Cards
+    description: Card lifecycle, reordering, and movement
+  - name: Realtime
+    description: WebSocket connection and lock state endpoints
+
+paths:
+  # ==========================================
+  # AUTH ENDPOINTS
+  # ==========================================
+  /auth/login:
+    post:
+      tags:
+        - Auth
+      summary: Login or create user account
+      description: Simple auth by email with optional display name. Returns user profile and auth token.
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Successfully authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          description: Invalid login credentials or parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/me:
+    get:
+      tags:
+        - Auth
+      summary: Get current authenticated user
+      description: Returns the user profile for the current bearer token session.
+      operationId: getCurrentUser
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Current user profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/logout:
+    post:
+      tags:
+        - Auth
+      summary: Logout current user
+      description: Invalidate active user session or token.
+      operationId: logout
+      security:
+        - BearerAuth: []
+      responses:
+        '204':
+          description: Successfully logged out
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/demo-users:
+    get:
+      tags:
+        - Auth
+      summary: List preset demo collaborator personas
+      description: Returns list of available demo personas (e.g. Alex, Sarah, David, Elena) for collaborative switching.
+      operationId: getDemoUsers
+      security: []
+      responses:
+        '200':
+          description: List of demo personas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+
+  /auth/switch-user:
+    post:
+      tags:
+        - Auth
+      summary: Switch active user persona
+      description: Quickly switch to another collaborator persona and broadcast join to active boards.
+      operationId: switchUser
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SwitchUserRequest'
+      responses:
+        '200':
+          description: Successfully switched persona
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ==========================================
+  # BOARDS ENDPOINTS
+  # ==========================================
+  /boards:
+    get:
+      tags:
+        - Boards
+      summary: List all accessible boards
+      description: Returns boards owned by or shared with the authenticated user.
+      operationId: getBoards
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of boards
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Board'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags:
+        - Boards
+      summary: Create a new collaborative board
+      description: Creates a board with default columns (To Do, In Progress, Done).
+      operationId: createBoard
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateBoardRequest'
+      responses:
+        '201':
+          description: Board created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Board'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /boards/{boardId}:
+    get:
+      tags:
+        - Boards
+      summary: Get board by ID
+      description: Retrieves complete board with members, columns, and cards.
+      operationId: getBoard
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: boardId
+          in: path
+          required: true
+          description: Unique identifier of the board
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Full board details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Board'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Board not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /boards/{boardId}/invite-url:
+    get:
+      tags:
+        - Boards
+      summary: Generate or retrieve board invite URL
+      description: Generates a shareable URL containing the invite token for equal/flat collaboration.
+      operationId: generateInviteUrl
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: boardId
+          in: path
+          required: true
+          description: Unique identifier of the board
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Shareable invite URL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InviteUrlResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Board not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /boards/join/{token}:
+    post:
+      tags:
+        - Boards
+      summary: Join board via invite token
+      description: Adds current authenticated user to the board members and returns the board.
+      operationId: joinBoardByToken
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          description: The board's invite token
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Joined board successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Board'
+        '400':
+          description: Invalid token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ==========================================
+  # COLUMNS ENDPOINTS
+  # ==========================================
+  /boards/{boardId}/columns:
+    post:
+      tags:
+        - Columns
+      summary: Create a new column in board
+      description: Appends a new column to the board. Broadcasts COLUMN_CREATED via WebSocket.
+      operationId: createColumn
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: boardId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateColumnRequest'
+      responses:
+        '201':
+          description: Column created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Column'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /columns/{columnId}:
+    put:
+      tags:
+        - Columns
+      summary: Update column title
+      description: Renames an existing column. Broadcasts COLUMN_UPDATED via WebSocket.
+      operationId: updateColumn
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: columnId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateColumnRequest'
+      responses:
+        '200':
+          description: Column updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Column'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Column not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags:
+        - Columns
+      summary: Delete column
+      description: Deletes a column and any cards belonging to it. Broadcasts COLUMN_DELETED via WebSocket.
+      operationId: deleteColumn
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: columnId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Column deleted
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Column not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /boards/{boardId}/columns/reorder:
+    put:
+      tags:
+        - Columns
+      summary: Reorder columns in board
+      description: Updates the sequential ordering of columns. Broadcasts COLUMN_REORDERED via WebSocket.
+      operationId: reorderColumns
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: boardId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReorderColumnsRequest'
+      responses:
+        '200':
+          description: Reordered columns list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Column'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ==========================================
+  # CARDS ENDPOINTS
+  # ==========================================
+  /cards:
+    post:
+      tags:
+        - Cards
+      summary: Create card in column
+      description: Adds a new card to a specific column. Broadcasts CARD_CREATED via WebSocket.
+      operationId: createCard
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCardRequest'
+      responses:
+        '201':
+          description: Card created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Card'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /cards/{cardId}:
+    put:
+      tags:
+        - Cards
+      summary: Update card details
+      description: Modifies title, description, assignee, tags, or due date. Broadcasts CARD_UPDATED via WebSocket.
+      operationId: updateCard
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: cardId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCardRequest'
+      responses:
+        '200':
+          description: Card updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Card'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Card not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags:
+        - Cards
+      summary: Delete card
+      description: Removes card from board. Broadcasts CARD_DELETED via WebSocket.
+      operationId: deleteCard
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: cardId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Card deleted
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Card not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /cards/{cardId}/move:
+    post:
+      tags:
+        - Cards
+      summary: Move card to another column or position
+      description: Repositions card using Last-Write-Wins position resolution. Broadcasts CARD_MOVED via WebSocket.
+      operationId: moveCard
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: cardId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MoveCardRequest'
+      responses:
+        '200':
+          description: Card moved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Card'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Card not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ==========================================
+  # REALTIME & LOCKS ENDPOINTS
+  # ==========================================
+  /boards/{boardId}/locks:
+    get:
+      tags:
+        - Realtime
+      summary: Get active card editing locks for board
+      description: Returns currently active card editing locks to display lock badges to peers.
+      operationId: getCardLocks
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: boardId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of active card locks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CardLock'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /boards/{boardId}/cards/{cardId}/lock:
+    post:
+      tags:
+        - Realtime
+      summary: Acquire exclusive editing lock on a card
+      description: >-
+        Attempts to acquire a card lock. Fails if another active peer already
+        holds the lock within expiration threshold. Broadcasts CARD_LOCKED.
+      operationId: acquireCardLock
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: boardId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: cardId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Lock acquisition result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AcquireLockResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags:
+        - Realtime
+      summary: Release editing lock on a card
+      description: Releases lock when modal closes. Broadcasts CARD_UNLOCKED via WebSocket.
+      operationId: releaseCardLock
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: boardId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: cardId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Lock released successfully
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /ws/boards/{boardId}:
+    get:
+      tags:
+        - Realtime
+      summary: Bidirectional WebSocket connection for live sync
+      description: >-
+        Upgrades HTTP connection to WebSocket protocol.
+        Streams live character typing events (`LIVE_TYPING`), card locks/unlocks,
+        and board entity changes (`CARD_CREATED`, `CARD_MOVED`, `USER_JOINED`, etc.).
+      operationId: boardWebSocket
+      security:
+        - QueryAuth: []
+      parameters:
+        - name: boardId
+          in: path
+          required: true
+          description: ID of board room to join
+          schema:
+            type: string
+        - name: token
+          in: query
+          required: true
+          description: Authentication Bearer token passed in query parameter for WS upgrade handshake
+          schema:
+            type: string
+      responses:
+        '101':
+          description: Switching Protocols to WebSocket stream
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Standard Bearer token authentication header
+    QueryAuth:
+      type: apiKey
+      in: query
+      name: token
+      description: Token query parameter for WebSocket upgrade handshake
+
+  schemas:
+    # --- Auth & User ---
+    User:
+      type: object
+      required:
+        - id
+        - name
+        - email
+        - avatar
+        - color
+      properties:
+        id:
+          type: string
+          example: user-1
+        name:
+          type: string
+          example: Alex Morgan
+        email:
+          type: string
+          format: email
+          example: alex@example.com
+        avatar:
+          type: string
+          format: uri
+          example: https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80
+        color:
+          type: string
+          example: '#3b82f6'
+
+    LoginRequest:
+      type: object
+      required:
+        - email
+      properties:
+        email:
+          type: string
+          format: email
+          example: alex@example.com
+        name:
+          type: string
+          example: Alex Morgan
+
+    SwitchUserRequest:
+      type: object
+      required:
+        - userId
+      properties:
+        userId:
+          type: string
+          example: user-2
+
+    AuthResponse:
+      type: object
+      required:
+        - user
+        - token
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        token:
+          type: string
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+
+    # --- Board ---
+    Board:
+      type: object
+      required:
+        - id
+        - title
+        - ownerId
+        - inviteToken
+        - members
+        - columns
+        - cards
+      properties:
+        id:
+          type: string
+          example: board-demo-1
+        title:
+          type: string
+          example: Team Product Launch
+        description:
+          type: string
+          nullable: true
+          example: Collaborative Sprint Kanban with real-time multi-user live sync
+        ownerId:
+          type: string
+          example: user-1
+        inviteToken:
+          type: string
+          example: invite-collab-xyz
+        members:
+          type: array
+          items:
+            $ref: '#/components/schemas/User'
+        columns:
+          type: array
+          items:
+            $ref: '#/components/schemas/Column'
+        cards:
+          type: array
+          items:
+            $ref: '#/components/schemas/Card'
+
+    CreateBoardRequest:
+      type: object
+      required:
+        - title
+      properties:
+        title:
+          type: string
+          example: Mobile App Redesign
+        description:
+          type: string
+          example: Sprint board for Q4 redesign
+
+    InviteUrlResponse:
+      type: object
+      required:
+        - inviteUrl
+        - inviteToken
+      properties:
+        inviteUrl:
+          type: string
+          example: http://localhost:5173/join/invite-collab-xyz
+        inviteToken:
+          type: string
+          example: invite-collab-xyz
+
+    # --- Column ---
+    Column:
+      type: object
+      required:
+        - id
+        - boardId
+        - title
+        - order
+      properties:
+        id:
+          type: string
+          example: col-1
+        boardId:
+          type: string
+          example: board-demo-1
+        title:
+          type: string
+          example: To Do
+        order:
+          type: integer
+          example: 0
+
+    CreateColumnRequest:
+      type: object
+      required:
+        - title
+      properties:
+        title:
+          type: string
+          example: In Review
+
+    UpdateColumnRequest:
+      type: object
+      required:
+        - title
+      properties:
+        title:
+          type: string
+          example: Completed QA
+
+    ReorderColumnsRequest:
+      type: object
+      required:
+        - columnIds
+      properties:
+        columnIds:
+          type: array
+          items:
+            type: string
+          example: ['col-1', 'col-3', 'col-2', 'col-4']
+
+    # --- Card ---
+    CardTag:
+      type: string
+      enum:
+        - feature
+        - bug
+        - urgent
+        - design
+        - docs
+      example: feature
+
+    Card:
+      type: object
+      required:
+        - id
+        - columnId
+        - title
+        - description
+        - tags
+        - order
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          example: card-1
+        columnId:
+          type: string
+          example: col-1
+        title:
+          type: string
+          example: Design interactive landing page mockups
+        description:
+          type: string
+          example: Figma wireframes with hero layout, feature grid, and responsive mobile view.
+        assigneeId:
+          type: string
+          nullable: true
+          example: user-2
+        tags:
+          type: array
+          items:
+            $ref: '#/components/schemas/CardTag'
+        dueDate:
+          type: string
+          format: date
+          nullable: true
+          example: '2026-09-18'
+        order:
+          type: integer
+          example: 0
+        createdAt:
+          type: string
+          format: date-time
+          example: '2026-09-10T10:00:00Z'
+        updatedAt:
+          type: string
+          format: date-time
+          example: '2026-09-10T10:00:00Z'
+
+    CreateCardRequest:
+      type: object
+      required:
+        - columnId
+        - title
+      properties:
+        columnId:
+          type: string
+          example: col-1
+        title:
+          type: string
+          example: Implement authentication middleware
+        description:
+          type: string
+          example: Validate token on protected API routes
+        assigneeId:
+          type: string
+          example: user-1
+        tags:
+          type: array
+          items:
+            $ref: '#/components/schemas/CardTag'
+        dueDate:
+          type: string
+          format: date
+          example: '2026-09-20'
+        order:
+          type: integer
+          example: 2
+
+    UpdateCardRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          example: Updated card title
+        description:
+          type: string
+          example: Updated detailed description
+        assigneeId:
+          type: string
+          nullable: true
+          example: user-3
+        tags:
+          type: array
+          items:
+            $ref: '#/components/schemas/CardTag'
+        dueDate:
+          type: string
+          format: date
+          nullable: true
+          example: '2026-09-25'
+        order:
+          type: integer
+          example: 1
+
+    MoveCardRequest:
+      type: object
+      required:
+        - targetColumnId
+        - newOrder
+      properties:
+        targetColumnId:
+          type: string
+          example: col-2
+        newOrder:
+          type: integer
+          example: 0
+
+    # --- Realtime & Locks ---
+    CardLock:
+      type: object
+      required:
+        - cardId
+        - userId
+        - userName
+        - userColor
+        - lockedAt
+      properties:
+        cardId:
+          type: string
+          example: card-1
+        userId:
+          type: string
+          example: user-2
+        userName:
+          type: string
+          example: Sarah Chen
+        userColor:
+          type: string
+          example: '#10b981'
+        lockedAt:
+          type: integer
+          description: Epoch timestamp (milliseconds) when lock was acquired
+          example: 1789063200000
+
+    AcquireLockResponse:
+      type: object
+      required:
+        - acquired
+      properties:
+        acquired:
+          type: boolean
+          example: true
+        lock:
+          $ref: '#/components/schemas/CardLock'
+
+    LiveTypingEvent:
+      type: object
+      required:
+        - cardId
+        - userId
+        - userName
+        - field
+        - value
+      properties:
+        cardId:
+          type: string
+          example: card-1
+        userId:
+          type: string
+          example: user-1
+        userName:
+          type: string
+          example: Alex Morgan
+        field:
+          type: string
+          enum:
+            - title
+            - description
+          example: title
+        value:
+          type: string
+          example: Design interactive landing page mockups v2
+
+    WebSocketMessage:
+      type: object
+      required:
+        - type
+        - boardId
+        - senderId
+        - payload
+        - timestamp
+      properties:
+        type:
+          type: string
+          enum:
+            - CARD_CREATED
+            - CARD_UPDATED
+            - CARD_MOVED
+            - CARD_DELETED
+            - COLUMN_CREATED
+            - COLUMN_UPDATED
+            - COLUMN_DELETED
+            - COLUMN_REORDERED
+            - USER_JOINED
+            - USER_LEFT
+            - CARD_LOCKED
+            - CARD_UNLOCKED
+            - LIVE_TYPING
+            - BOARD_RESET
+          example: LIVE_TYPING
+        boardId:
+          type: string
+          example: board-demo-1
+        senderId:
+          type: string
+          example: user-1
+        payload:
+          type: object
+          description: Dynamic payload matching the event type
+        timestamp:
+          type: integer
+          example: 1789063200000
+
+    # --- Common Error ---
+    ErrorResponse:
+      type: object
+      required:
+        - detail
+      properties:
+        detail:
+          type: string
+          example: Entity not found or unauthorized
