@@ -22,7 +22,7 @@ def create_board(req: CreateBoardRequest, current_user: User = Depends(get_curre
 
 @router.get("/boards/{board_id}", response_model=Board)
 def get_board(board_id: str, current_user: User = Depends(get_current_user)):
-    board = store.get_board(board_id)
+    board = store.get_board(board_id, user=current_user)
     if not board:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

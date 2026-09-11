@@ -304,11 +304,17 @@ export const CardModal: React.FC<CardModalProps> = ({ card, onClose }) => {
                 }}
               >
                 <option value="">NONE</option>
-                {board?.members.map((member) => (
-                  <option key={member.id} value={member.id}>
-                    @{member.name.toLowerCase()} {member.id === currentUser?.id ? '(YOU)' : ''}
-                  </option>
-                ))}
+                {(() => {
+                  const members = [...(board?.members || [])]
+                  if (currentUser && !members.some((m) => m.id === currentUser.id)) {
+                    members.push(currentUser)
+                  }
+                  return members.map((member) => (
+                    <option key={member.id} value={member.id}>
+                      @{member.name.toLowerCase()} {member.id === currentUser?.id ? '(YOU)' : ''}
+                    </option>
+                  ))
+                })()}
               </select>
             </div>
 

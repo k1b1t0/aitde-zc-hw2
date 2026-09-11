@@ -270,12 +270,26 @@ class DatabaseStore:
             )
             return [self._board_db_to_model(b) for b in boards]
 
-    def get_board(self, board_id: str) -> Optional[Board]:
+    def get_board(self, board_id: str, user: Optional[User] = None) -> Optional[Board]:
         with SessionLocal() as db:
             b = db.query(BoardDB).filter(BoardDB.id == board_id).first()
-            if b:
-                return self._board_db_to_model(b)
-            return None
+            if not b:
+                return None
+            if user:
+                user_db = db.query(UserDB).filter(UserDB.id == user.id).first()
+                if user_db and not any(m.id == user.id for m in b.members):
+                    b.members.append(user_db)
+                    db.commit()
+                    db.refresh(b)
+            return self._board_db_to_model(b)
+
+    def ensure_member(self, board_id: str, user_id: str) -> None:
+        with SessionLocal() as db:
+            b = db.query(BoardDB).filter(BoardDB.id == board_id).first()
+            u = db.query(UserDB).filter(UserDB.id == user_id).first()
+            if b and u and not any(m.id == user_id for m in b.members):
+                b.members.append(u)
+                db.commit()
 
     def create_board(self, title: str, description: Optional[str], owner: User) -> Board:
         with SessionLocal() as db:

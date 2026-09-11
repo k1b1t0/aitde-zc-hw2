@@ -61,6 +61,7 @@ async def board_websocket(websocket: WebSocket, board_id: str, token: str = Quer
 
     await websocket.accept()
     store.add_connection(board_id, websocket)
+    store.ensure_member(board_id, user.id)
 
     # Broadcast user joined
     join_msg = WebSocketMessage(
