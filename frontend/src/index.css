@@ -1,0 +1,158 @@
+:root {
+  --font-family: 'JetBrains Mono', monospace;
+  
+  /* Retro terminal & 90s cyberpunk-meets-classic-GUI theme */
+  --bg-primary: #0a0e14;
+  --bg-secondary: #131720;
+  --bg-tertiary: #1b212c;
+  --bg-card: #161c26;
+  --bg-card-hover: #1f2735;
+  
+  --text-primary: #e6edf3;
+  --text-secondary: #9da8b6;
+  --text-muted: #5d6b7c;
+  
+  --border-color: #2b3545;
+  --border-focus: #00ff66;
+  --border-strong: #3d4a60;
+
+  /* Terminal neon & 90s accents */
+  --accent-primary: #00ff66;       /* Neon Terminal Green */
+  --accent-text: #051409;
+  --accent-hover: #00cc52;
+  --accent-glow: rgba(0, 255, 102, 0.35);
+  --accent-cyan: #00e5ff;          /* Cyan */
+  --accent-amber: #ffb800;         /* Amber */
+  --accent-magenta: #ff007f;       /* 90s Hot Pink */
+
+  --success: #00ff66;
+  --warning: #ffb800;
+  --danger: #ff3344;
+  --info: #00e5ff;
+
+  /* 90s / Retro-Pop Isometric 3D Shadows */
+  --shadow-pop: 4px 4px 0px #000000;
+  --shadow-pop-hover: 6px 6px 0px #000000;
+  --shadow-pop-active: 1px 1px 0px #000000;
+  --shadow-column: 5px 5px 0px rgba(0, 0, 0, 0.8);
+  --shadow-modal: 8px 8px 0px #000000;
+
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
+  --radius-full: 4px;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-family);
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  min-height: 100vh;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  background-image: 
+    radial-gradient(rgba(0, 255, 102, 0.04) 1px, transparent 0),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+  background-size: 24px 24px, 100% 4px;
+}
+
+/* CRT Scanline overlay subtle effect */
+body::after {
+  content: " ";
+  display: block;
+  position: fixed;
+  top: 0; left: 0; bottom: 0; right: 0;
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.15) 50%);
+  background-size: 100% 3px;
+  z-index: 9999;
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+button, input, textarea, select {
+  font-family: var(--font-family);
+  letter-spacing: -0.01em;
+}
+
+/* 90s / Terminal Button Base Style */
+.retro-btn {
+  font-family: var(--font-family);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 0.45rem 0.85rem;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 2px solid var(--border-color);
+  box-shadow: 2px 2px 0px #000;
+  cursor: pointer;
+  transition: all 0.1s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.retro-btn:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0px #000;
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+.retro-btn:active {
+  transform: translate(1px, 1px);
+  box-shadow: 1px 1px 0px #000;
+}
+
+.retro-btn-primary {
+  background: var(--accent-primary);
+  color: var(--accent-text);
+  border-color: #00ff66;
+  box-shadow: 3px 3px 0px #000;
+}
+
+.retro-btn-primary:hover {
+  background: #33ff88;
+  color: #000;
+  box-shadow: 4px 4px 0px #000;
+}
+
+/* Terminal tags */
+.tag-feature { background: #002b11; color: #00ff66; border: 1px solid #00ff66; }
+.tag-bug { background: #2f070b; color: #ff3344; border: 1px solid #ff3344; }
+.tag-urgent { background: #332000; color: #ffb800; border: 1px solid #ffb800; }
+.tag-design { background: #30001a; color: #ff007f; border: 1px solid #ff007f; }
+.tag-docs { background: #00232b; color: #00e5ff; border: 1px solid #00e5ff; }
+
+/* Scrollbars */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border: 1px solid #000;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-primary);
+}
+
+@keyframes terminal-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.cursor-blink {
+  animation: terminal-blink 1s infinite;
+}
