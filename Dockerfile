@@ -40,5 +40,6 @@ RUN mkdir -p /app/data
 
 EXPOSE 8000
 
-# Run FastAPI app using uvicorn through uv
-CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run FastAPI app using uvicorn through uv (support PORT env var from Render)
+CMD ["sh", "-c", "uv run uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+
