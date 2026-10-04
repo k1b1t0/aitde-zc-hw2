@@ -4,6 +4,11 @@ from app.main import app
 
 client = TestClient(app)
 
+@pytest.fixture(autouse=True, scope="session")
+def setup_test_db():
+    from app.store import store
+    store.init_db()
+
 @pytest.fixture
 def auth_header():
     # Login as seed demo user Alex Morgan
