@@ -1,20 +1,21 @@
-.PHONY: help install run run-backend run-frontend test test-backend test-frontend build-frontend clean docker-build docker-run compose-up compose-down
+.PHONY: help install run run-backend run-frontend test test-backend test-frontend test-integration build-frontend clean docker-build docker-run compose-up compose-down
 
 help:
 	@echo "Available commands:"
-	@echo "  make install         Install dependencies for both backend and frontend"
-	@echo "  make run             Run both backend (port 8000) and frontend (port 5173)"
-	@echo "  make run-backend     Run FastAPI backend with reload (http://localhost:8000)"
-	@echo "  make run-frontend    Run Vite frontend dev server (http://localhost:5173)"
-	@echo "  make test            Run all tests (backend pytest + frontend vitest)"
-	@echo "  make test-backend    Run backend tests with uv"
-	@echo "  make test-frontend   Run frontend tests with vitest"
-	@echo "  make build-frontend  Build production frontend bundle"
-	@echo "  make docker-build    Build multi-stage Docker image"
-	@echo "  make docker-run      Run Docker container on port 8000"
-	@echo "  make compose-up      Run full stack with Postgres using docker compose"
-	@echo "  make compose-down    Stop docker compose services"
-	@echo "  make clean           Clean caches and build artifacts"
+	@echo "  make install          Install dependencies for both backend and frontend"
+	@echo "  make run              Run both backend (port 8000) and frontend (port 5173)"
+	@echo "  make run-backend      Run FastAPI backend with reload (http://localhost:8000)"
+	@echo "  make run-frontend     Run Vite frontend dev server (http://localhost:5173)"
+	@echo "  make test             Run unit tests (backend pytest + frontend vitest)"
+	@echo "  make test-backend     Run backend unit tests with uv"
+	@echo "  make test-frontend    Run frontend tests with vitest"
+	@echo "  make test-integration Run integration tests against running docker compose stack"
+	@echo "  make build-frontend   Build production frontend bundle"
+	@echo "  make docker-build     Build multi-stage Docker image"
+	@echo "  make docker-run       Run Docker container on port 8000"
+	@echo "  make compose-up       Run full stack with Postgres using docker compose"
+	@echo "  make compose-down     Stop docker compose services"
+	@echo "  make clean            Clean caches and build artifacts"
 
 install:
 	@echo "==> Installing backend dependencies with uv..."
@@ -38,12 +39,16 @@ run:
 	wait
 
 test-backend:
-	@echo "==> Running backend tests..."
-	cd backend && uv run pytest
+	@echo "==> Running backend unit tests..."
+	cd backend && uv run pytest tests/test_backend.py
 
 test-frontend:
 	@echo "==> Running frontend tests..."
 	cd frontend && npm test
+
+test-integration:
+	@echo "==> Running integration tests against Docker Compose stack..."
+	cd backend && uv run pytest tests/test_integration_compose.py
 
 test: test-backend test-frontend
 
