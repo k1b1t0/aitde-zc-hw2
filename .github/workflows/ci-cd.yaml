@@ -115,38 +115,44 @@ jobs:
         run: docker compose down -v
 
   # =========================================================================
-  # 3. Continuous Deployment to Render & Post-Deploy Health Check Validation
+  # 3. Continuous Deployment to Dev on Render & Post-Deploy Health Validation
   # =========================================================================
-  deploy:
-    name: Deploy to Render & Validate Health
+  deploy-dev:
+    name: Deploy to Dev on Render & Validate Health
     needs: [integration-and-e2e]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger Render Deploy Hook
-        if: env.RENDER_DEPLOY_HOOK_URL != ''
+      - name: Trigger Dev Render Deploy Hook
         env:
-          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+          DEV_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEV_DEPLOY_HOOK_URL || secrets.RENDER_DEPLOY_HOOK_URL }}
         run: |
-          echo "Triggering deployment on Render via Deploy Hook..."
-          curl -f -X POST "${RENDER_DEPLOY_HOOK_URL}"
-          echo "Deploy triggered successfully."
+          if [ -z "$DEV_DEPLOY_HOOK_URL" ]; then
+            echo "Neither RENDER_DEV_DEPLOY_HOOK_URL nor RENDER_DEPLOY_HOOK_URL secret is set. Skipping auto-deploy."
+            exit 0
+          fi
+          echo "Triggering deployment on Render Dev via Deploy Hook..."
+          curl -f -X POST "${DEV_DEPLOY_HOOK_URL}"
+          echo "Dev deploy triggered successfully."
 
-      - name: Validate Production Health Endpoint
-        if: env.RENDER_APP_URL != ''
+      - name: Validate Dev Health Endpoint
         env:
-          RENDER_APP_URL: ${{ secrets.RENDER_APP_URL }}
+          DEV_APP_URL: ${{ secrets.RENDER_DEV_APP_URL || secrets.RENDER_APP_URL }}
         run: |
-          echo "Validating health endpoint at ${RENDER_APP_URL}/api/v1/health..."
+          if [ -z "$DEV_APP_URL" ]; then
+            echo "Neither RENDER_DEV_APP_URL nor RENDER_APP_URL secret is set. Skipping health check."
+            exit 0
+          fi
+          echo "Validating health endpoint at ${DEV_APP_URL}/api/v1/health..."
           # Allow up to 3 minutes for Render zero-downtime build & rollout to complete
           for i in {1..36}; do
-            RESPONSE=$(curl -s "${RENDER_APP_URL}/api/v1/health" || true)
+            RESPONSE=$(curl -s "${DEV_APP_URL}/api/v1/health" || true)
             if echo "$RESPONSE" | grep -q '"status":"ok"'; then
-              echo "SUCCESS: Production health check passed!"
+              echo "SUCCESS: Dev health check passed!"
               exit 0
             fi
             echo "Waiting for live rollout ($i/36)..."
             sleep 5
           done
-          echo "Health check failed after 3 minutes. Last response: $RESPONSE"
+          echo "Dev health check failed after 3 minutes. Last response: $RESPONSE"
           exit 1

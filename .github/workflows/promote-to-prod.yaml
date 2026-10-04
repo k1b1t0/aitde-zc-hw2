@@ -1,0 +1,117 @@
+name: Promote to Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_promotion:
+        description: 'Type "promote" to confirm promoting Dev to Production'
+        required: true
+        default: 'promote'
+
+jobs:
+  # =========================================================================
+  # 1. Verification: Ensure all tests pass before promoting
+  # =========================================================================
+  verify-tests:
+    name: Verify Tests Before Promotion
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate Confirmation Input
+        run: |
+          if [ "${{ github.event.inputs.confirm_promotion }}" != "promote" ]; then
+            echo "Promotion aborted: Confirmation input did not match 'promote'."
+            exit 1
+          fi
+
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Run Backend Unit Tests
+        working-directory: backend
+        run: |
+          uv sync --frozen
+          uv run pytest tests/test_backend.py
+
+      - name: Run Frontend Unit Tests
+        working-directory: frontend
+        run: |
+          npm ci
+          npm test
+
+      - name: Run Integration Tests
+        run: |
+          docker compose up -d --build
+          echo "Waiting for app to start..."
+          for i in {1..30}; do
+            if curl -s http://localhost:8000/api/v1/health | grep -q '"status":"ok"'; then
+              echo "Dev stack ready for integration tests!"
+              break
+            fi
+            sleep 2
+          done
+          cd backend && uv run pytest tests/test_integration_compose.py
+
+      - name: Teardown Compose Stack
+        if: always()
+        run: docker compose down -v
+
+  # =========================================================================
+  # 2. Promote: Trigger Production Deploy Hook & Validate Health
+  # =========================================================================
+  promote-to-production:
+    name: Promote & Deploy to Production
+    needs: [verify-tests]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Production Deploy Hook
+        env:
+          PROD_DEPLOY_HOOK_URL: ${{ secrets.RENDER_PROD_DEPLOY_HOOK_URL || secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "$PROD_DEPLOY_HOOK_URL" ]; then
+            echo "ERROR: Neither RENDER_PROD_DEPLOY_HOOK_URL nor RENDER_DEPLOY_HOOK_URL secret is set in GitHub repository secrets."
+            exit 1
+          fi
+          echo "Triggering Production deployment via Render deploy hook..."
+          curl -f -X POST "${PROD_DEPLOY_HOOK_URL}"
+          echo "Production deployment trigger submitted successfully."
+
+      - name: Validate Production Health
+        env:
+          PROD_APP_URL: ${{ secrets.RENDER_PROD_APP_URL }}
+        run: |
+          if [ -z "$PROD_APP_URL" ]; then
+            echo "RENDER_PROD_APP_URL secret is not set. Skipping live health verification."
+            echo "To enable live health validation, set RENDER_PROD_APP_URL (e.g. https://kanban-app-prod.onrender.com)."
+            exit 0
+          fi
+
+          echo "Validating production health endpoint at ${PROD_APP_URL}/api/v1/health..."
+          # Allow up to 3 minutes for Render zero-downtime deployment to complete
+          for i in {1..36}; do
+            RESPONSE=$(curl -s "${PROD_APP_URL}/api/v1/health" || true)
+            if echo "$RESPONSE" | grep -q '"status":"ok"'; then
+              echo "SUCCESS: Production health check passed!"
+              exit 0
+            fi
+            echo "Waiting for production rollout ($i/36)..."
+            sleep 5
+          done
+          echo "Production health check failed after 3 minutes. Last response: $RESPONSE"
+          exit 1
