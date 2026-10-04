@@ -13,9 +13,12 @@ def auth_header():
     return {"Authorization": f"Bearer {token}"}
 
 def test_health_check():
-    resp = client.get("/")
+    resp = client.get("/api/v1/health")
     assert resp.status_code == 200
     assert resp.json()["status"] == "ok"
+
+    resp_root = client.get("/")
+    assert resp_root.status_code == 200
 
 def test_auth_flow(auth_header):
     # Test /auth/me

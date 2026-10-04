@@ -1,4 +1,4 @@
-.PHONY: help install run run-backend run-frontend test test-backend test-frontend build-frontend clean
+.PHONY: help install run run-backend run-frontend test test-backend test-frontend build-frontend clean docker-build docker-run
 
 help:
 	@echo "Available commands:"
@@ -10,6 +10,8 @@ help:
 	@echo "  make test-backend    Run backend tests with uv"
 	@echo "  make test-frontend   Run frontend tests with vitest"
 	@echo "  make build-frontend  Build production frontend bundle"
+	@echo "  make docker-build    Build multi-stage Docker image"
+	@echo "  make docker-run      Run Docker container on port 8000"
 	@echo "  make clean           Clean caches and build artifacts"
 
 install:
@@ -46,6 +48,14 @@ test: test-backend test-frontend
 build-frontend:
 	@echo "==> Building frontend for production..."
 	cd frontend && npm run build
+
+docker-build:
+	@echo "==> Building multi-stage Docker image kanban-app:latest..."
+	docker build -t kanban-app:latest .
+
+docker-run:
+	@echo "==> Running Docker container on http://localhost:8000..."
+	docker run --rm -p 8000:8000 kanban-app:latest
 
 clean:
 	@echo "==> Cleaning cache and build artifacts..."

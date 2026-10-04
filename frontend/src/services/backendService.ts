@@ -11,8 +11,15 @@ import type {
 } from '../types'
 import type { KanbanService } from './api'
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1'
-const WS_BASE_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8000/api/v1/ws'
+// Use relative or current origin URLs when in browser environment, fallback to localhost:8000 for dev/SSR
+const isBrowser = typeof window !== 'undefined'
+const defaultApiUrl = isBrowser ? `${window.location.origin}/api/v1` : 'http://localhost:8000/api/v1'
+const defaultWsUrl = isBrowser
+  ? `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/api/v1/ws`
+  : 'ws://localhost:8000/api/v1/ws'
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || defaultApiUrl
+const WS_BASE_URL = import.meta.env.VITE_WS_URL || defaultWsUrl
 
 export class BackendKanbanService implements KanbanService {
   private token: string | null = null
