@@ -143,16 +143,21 @@ jobs:
             echo "Neither RENDER_DEV_APP_URL nor RENDER_APP_URL secret is set. Skipping health check."
             exit 0
           fi
-          echo "Validating health endpoint at ${DEV_APP_URL}/api/v1/health..."
-          # Allow up to 3 minutes for Render zero-downtime build & rollout to complete
-          for i in {1..36}; do
-            RESPONSE=$(curl -s "${DEV_APP_URL}/api/v1/health" || true)
+
+          # Strip trailing slash and any trailing /api or /api/v1 if user included it in secret
+          CLEAN_URL=$(echo "$DEV_APP_URL" | sed -e 's|/*$||' -e 's|/api/v1$||' -e 's|/api$||')
+          HEALTH_URL="${CLEAN_URL}/api/v1/health"
+
+          echo "Validating health endpoint at ${HEALTH_URL}..."
+          # Allow up to 5 minutes (50 * 6s) for Render free-tier cold start & build rollout
+          for i in {1..50}; do
+            RESPONSE=$(curl -s -L --max-time 10 "${HEALTH_URL}" || true)
             if echo "$RESPONSE" | grep -q '"status":"ok"'; then
               echo "SUCCESS: Dev health check passed!"
               exit 0
             fi
-            echo "Waiting for live rollout ($i/36)..."
-            sleep 5
+            echo "Waiting for live rollout ($i/50)... Response: $RESPONSE"
+            sleep 6
           done
-          echo "Dev health check failed after 3 minutes. Last response: $RESPONSE"
+          echo "Dev health check failed after timeout. Last response: $RESPONSE"
           exit 1

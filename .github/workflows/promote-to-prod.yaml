@@ -102,16 +102,20 @@ jobs:
             exit 0
           fi
 
-          echo "Validating production health endpoint at ${PROD_APP_URL}/api/v1/health..."
-          # Allow up to 3 minutes for Render zero-downtime deployment to complete
-          for i in {1..36}; do
-            RESPONSE=$(curl -s "${PROD_APP_URL}/api/v1/health" || true)
+          # Strip trailing slash and any trailing /api or /api/v1 if user included it in secret
+          CLEAN_URL=$(echo "$PROD_APP_URL" | sed -e 's|/*$||' -e 's|/api/v1$||' -e 's|/api$||')
+          HEALTH_URL="${CLEAN_URL}/api/v1/health"
+
+          echo "Validating production health endpoint at ${HEALTH_URL}..."
+          # Allow up to 5 minutes (50 * 6s) for Render zero-downtime deployment to complete
+          for i in {1..50}; do
+            RESPONSE=$(curl -s -L --max-time 10 "${HEALTH_URL}" || true)
             if echo "$RESPONSE" | grep -q '"status":"ok"'; then
               echo "SUCCESS: Production health check passed!"
               exit 0
             fi
-            echo "Waiting for production rollout ($i/36)..."
-            sleep 5
+            echo "Waiting for production rollout ($i/50)... Response: $RESPONSE"
+            sleep 6
           done
-          echo "Production health check failed after 3 minutes. Last response: $RESPONSE"
+          echo "Production health check failed after timeout. Last response: $RESPONSE"
           exit 1
