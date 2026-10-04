@@ -1,4 +1,4 @@
-.PHONY: help install run run-backend run-frontend test test-backend test-frontend build-frontend clean docker-build docker-run
+.PHONY: help install run run-backend run-frontend test test-backend test-frontend build-frontend clean docker-build docker-run compose-up compose-down
 
 help:
 	@echo "Available commands:"
@@ -12,6 +12,8 @@ help:
 	@echo "  make build-frontend  Build production frontend bundle"
 	@echo "  make docker-build    Build multi-stage Docker image"
 	@echo "  make docker-run      Run Docker container on port 8000"
+	@echo "  make compose-up      Run full stack with Postgres using docker compose"
+	@echo "  make compose-down    Stop docker compose services"
 	@echo "  make clean           Clean caches and build artifacts"
 
 install:
@@ -56,6 +58,14 @@ docker-build:
 docker-run:
 	@echo "==> Running Docker container on http://localhost:8000..."
 	docker run --rm -p 8000:8000 kanban-app:latest
+
+compose-up:
+	@echo "==> Starting Postgres and App via Docker Compose..."
+	docker compose up --build
+
+compose-down:
+	@echo "==> Stopping Docker Compose services..."
+	docker compose down
 
 clean:
 	@echo "==> Cleaning cache and build artifacts..."
