@@ -112,13 +112,13 @@ def test_e2e_kanban_crud_pipeline(client):
         headers=headers,
         json={"title": "QA Verification"},
     )
-    assert col_resp.status_code == 200
+    assert col_resp.status_code == 201
     col = col_resp.json()
     col_id = col["id"]
 
     # 4. Create a Card
     card_resp = client.post(
-        f"/api/v1/boards/{board_id}/cards",
+        "/api/v1/cards",
         headers=headers,
         json={
             "columnId": col_id,
@@ -127,7 +127,7 @@ def test_e2e_kanban_crud_pipeline(client):
             "tags": ["integration", "docker"],
         },
     )
-    assert card_resp.status_code == 200
+    assert card_resp.status_code == 201
     card = card_resp.json()
     card_id = card["id"]
     assert card["title"] == "Verify Compose Postgres DB"
