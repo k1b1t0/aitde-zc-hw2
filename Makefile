@@ -1,4 +1,4 @@
-.PHONY: help install run run-backend run-frontend test test-backend test-frontend test-integration test-e2e build-frontend clean docker-build docker-run compose-up compose-down
+.PHONY: help install run run-backend run-frontend test test-backend test-frontend test-integration test-e2e build-frontend clean docker-build docker-run compose-up compose-down compose-prod-up compose-prod-down
 
 help:
 	@echo "Available commands:"
@@ -16,6 +16,8 @@ help:
 	@echo "  make docker-run       Run Docker container on port 8000"
 	@echo "  make compose-up       Run full stack with Postgres using docker compose"
 	@echo "  make compose-down     Stop docker compose services"
+	@echo "  make compose-prod-up  Run full production stack with Postgres using docker-compose.prod.yaml (port 8001)"
+	@echo "  make compose-prod-down Stop production docker compose services"
 	@echo "  make clean            Clean caches and build artifacts"
 
 install:
@@ -76,6 +78,15 @@ compose-up:
 compose-down:
 	@echo "==> Stopping Docker Compose services..."
 	docker compose down
+
+compose-prod-up:
+	@echo "==> Starting isolated Production Postgres and App via docker-compose.prod.yaml..."
+	docker compose -f docker-compose.prod.yaml up --build
+
+compose-prod-down:
+	@echo "==> Stopping isolated Production Docker Compose services..."
+	docker compose -f docker-compose.prod.yaml down
+
 
 clean:
 	@echo "==> Cleaning cache and build artifacts..."

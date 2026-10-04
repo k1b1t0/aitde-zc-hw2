@@ -1,21 +1,47 @@
 services:
-  # The fullstack Kanban app (FastAPI backend serving React frontend)
+  # =========================================================================
+  # DEV ENVIRONMENT (Development Stack)
+  # =========================================================================
   - type: web
-    name: kanban-app
+    name: kanban-app-dev
     runtime: docker
     dockerfilePath: ./Dockerfile
     plan: free
     region: oregon
+    branch: main
     envVars:
       - key: DATABASE_URL
         fromDatabase:
-          name: kanban-db
+          name: kanban-db-dev
+          property: connectionString
+
+  # =========================================================================
+  # PROD ENVIRONMENT (Production Stack)
+  # =========================================================================
+  - type: web
+    name: kanban-app-prod
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: oregon
+    branch: main
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: kanban-db-prod
           property: connectionString
 
 databases:
-  # Free PostgreSQL database on Render
-  - name: kanban-db
+  # Dev PostgreSQL Database
+  - name: kanban-db-dev
     plan: free
     region: oregon
-    databaseName: kanban
-    user: kanban_user
+    databaseName: kanban_dev
+    user: kanban_dev_user
+
+  # Prod PostgreSQL Database (Independent from Dev)
+  - name: kanban-db-prod
+    plan: free
+    region: oregon
+    databaseName: kanban_prod
+    user: kanban_prod_user

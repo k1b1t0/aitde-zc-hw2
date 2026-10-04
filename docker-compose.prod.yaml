@@ -1,0 +1,37 @@
+services:
+  # Isolated Production PostgreSQL
+  db-prod:
+    image: postgres:16-alpine
+    container_name: kanban-postgres-prod
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${PROD_POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${PROD_POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${PROD_POSTGRES_DB:-kanban_prod}
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres-prod-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PROD_POSTGRES_USER:-postgres} -d ${PROD_POSTGRES_DB:-kanban_prod}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Isolated Production Application Container
+  app-prod:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: kanban-app-prod
+    restart: unless-stopped
+    depends_on:
+      db-prod:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg2://${PROD_POSTGRES_USER:-postgres}:${PROD_POSTGRES_PASSWORD:-postgres}@db-prod:5432/${PROD_POSTGRES_DB:-kanban_prod}
+    ports:
+      - "8001:8000"
+
+volumes:
+  postgres-prod-data:
