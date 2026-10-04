@@ -124,7 +124,7 @@ def test_e2e_kanban_crud_pipeline(client):
             "columnId": col_id,
             "title": "Verify Compose Postgres DB",
             "description": "Integration test payload",
-            "tags": ["integration", "docker"],
+            "tags": ["feature", "docs"],
         },
     )
     assert card_resp.status_code == 201
