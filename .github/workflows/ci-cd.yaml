@@ -1,0 +1,152 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # =========================================================================
+  # 1. Parallel Unit Tests: Backend & Frontend
+  # =========================================================================
+  test-backend:
+    name: Backend Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install Backend Dependencies
+        working-directory: backend
+        run: uv sync --frozen
+
+      - name: Run Pytest Unit Tests
+        working-directory: backend
+        run: uv run pytest tests/test_backend.py
+
+  test-frontend:
+    name: Frontend Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Frontend Dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Run Vitest Unit Tests
+        working-directory: frontend
+        run: npm test
+
+  # =========================================================================
+  # 2. Integration & End-to-End Tests against Docker Compose Stack
+  # =========================================================================
+  integration-and-e2e:
+    name: Docker Compose Integration & Playwright E2E Tests
+    needs: [test-backend, test-frontend]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install Backend and Playwright Dependencies
+        working-directory: backend
+        run: |
+          uv sync --frozen
+          uv run playwright install --with-deps chromium
+
+      - name: Start Docker Compose Stack (Postgres + App)
+        run: docker compose up -d --build
+
+      - name: Wait for App Health Check
+        run: |
+          echo "Waiting for app service to be healthy..."
+          for i in {1..30}; do
+            if curl -s http://localhost:8000/api/v1/health | grep -q '"status":"ok"'; then
+              echo "App is healthy and serving requests!"
+              exit 0
+            fi
+            echo "Waiting ($i/30)..."
+            sleep 2
+          done
+          echo "App failed to start in time. Logs:"
+          docker compose logs
+          exit 1
+
+      - name: Run Integration Tests
+        working-directory: backend
+        run: uv run pytest tests/test_integration_compose.py
+
+      - name: Run Playwright End-to-End Collaboration Tests
+        working-directory: backend
+        run: uv run pytest ../e2e/test_collaboration_e2e.py
+
+      - name: Teardown Docker Compose Stack
+        if: always()
+        run: docker compose down -v
+
+  # =========================================================================
+  # 3. Continuous Deployment to Render & Post-Deploy Health Check Validation
+  # =========================================================================
+  deploy:
+    name: Deploy to Render & Validate Health
+    needs: [integration-and-e2e]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Render Deploy Hook
+        if: env.RENDER_DEPLOY_HOOK_URL != ''
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          echo "Triggering deployment on Render via Deploy Hook..."
+          curl -f -X POST "${RENDER_DEPLOY_HOOK_URL}"
+          echo "Deploy triggered successfully."
+
+      - name: Validate Production Health Endpoint
+        if: env.RENDER_APP_URL != ''
+        env:
+          RENDER_APP_URL: ${{ secrets.RENDER_APP_URL }}
+        run: |
+          echo "Validating health endpoint at ${RENDER_APP_URL}/api/v1/health..."
+          # Allow up to 3 minutes for Render zero-downtime build & rollout to complete
+          for i in {1..36}; do
+            RESPONSE=$(curl -s "${RENDER_APP_URL}/api/v1/health" || true)
+            if echo "$RESPONSE" | grep -q '"status":"ok"'; then
+              echo "SUCCESS: Production health check passed!"
+              exit 0
+            fi
+            echo "Waiting for live rollout ($i/36)..."
+            sleep 5
+          done
+          echo "Health check failed after 3 minutes. Last response: $RESPONSE"
+          exit 1

@@ -36,11 +36,17 @@ interface BoardContextType {
 
 const BoardContext = createContext<BoardContextType | undefined>(undefined)
 
-export const BoardProvider: React.FC<{ boardId?: string; children: React.ReactNode }> = ({
-  boardId = 'board-demo-1',
+export const BoardProvider: React.FC<{
+  boardId?: string
+  initialJoinToken?: string
+  children: React.ReactNode
+}> = ({
+  boardId: defaultBoardId = 'board-demo-1',
+  initialJoinToken,
   children,
 }) => {
   const { currentUser } = useAuth()
+  const [boardId, setBoardId] = useState<string>(defaultBoardId)
   const [board, setBoard] = useState<Board | null>(null)
   const [loading, setLoading] = useState(true)
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('connected')
@@ -56,6 +62,17 @@ export const BoardProvider: React.FC<{ boardId?: string; children: React.ReactNo
 
   const loadBoardData = useCallback(async () => {
     try {
+      if (initialJoinToken) {
+        try {
+          const joinedBoard = await service.joinBoardByToken(initialJoinToken)
+          setBoard(joinedBoard)
+          setBoardId(joinedBoard.id)
+          setCardLocks(service.getCardLocks(joinedBoard.id))
+          return
+        } catch (joinErr) {
+          console.warn('Failed to join by token, falling back to boardId:', joinErr)
+        }
+      }
       const data = await service.getBoard(boardId)
       setBoard(data)
       setCardLocks(service.getCardLocks(boardId))
@@ -64,7 +81,7 @@ export const BoardProvider: React.FC<{ boardId?: string; children: React.ReactNo
     } finally {
       setLoading(false)
     }
-  }, [boardId, service])
+  }, [boardId, initialJoinToken, service])
 
   useEffect(() => {
     loadBoardData()

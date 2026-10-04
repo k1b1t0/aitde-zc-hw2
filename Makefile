@@ -1,4 +1,4 @@
-.PHONY: help install run run-backend run-frontend test test-backend test-frontend test-integration build-frontend clean docker-build docker-run compose-up compose-down
+.PHONY: help install run run-backend run-frontend test test-backend test-frontend test-integration test-e2e build-frontend clean docker-build docker-run compose-up compose-down
 
 help:
 	@echo "Available commands:"
@@ -10,6 +10,7 @@ help:
 	@echo "  make test-backend     Run backend unit tests with uv"
 	@echo "  make test-frontend    Run frontend tests with vitest"
 	@echo "  make test-integration Run integration tests against running docker compose stack"
+	@echo "  make test-e2e         Run Playwright multi-user E2E tests against running stack"
 	@echo "  make build-frontend   Build production frontend bundle"
 	@echo "  make docker-build     Build multi-stage Docker image"
 	@echo "  make docker-run       Run Docker container on port 8000"
@@ -49,6 +50,10 @@ test-frontend:
 test-integration:
 	@echo "==> Running integration tests against Docker Compose stack..."
 	cd backend && uv run pytest tests/test_integration_compose.py
+
+test-e2e:
+	@echo "==> Running Playwright end-to-end tests against Docker Compose stack..."
+	cd backend && uv run pytest ../e2e/test_collaboration_e2e.py
 
 test: test-backend test-frontend
 
