@@ -81,7 +81,7 @@ export const BoardProvider: React.FC<{
     } finally {
       setLoading(false)
     }
-  }, [boardId, initialJoinToken, service])
+  }, [boardId, initialJoinToken, service, currentUser])
 
   useEffect(() => {
     loadBoardData()

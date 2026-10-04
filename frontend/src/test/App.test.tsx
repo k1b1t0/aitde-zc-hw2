@@ -10,8 +10,10 @@ describe('Mini Kanban App UI & Collaboration', () => {
   it('renders navbar brand and default board title', async () => {
     render(<App />)
 
-    expect(screen.getByText('MINI_KANBAN.v1')).toBeInTheDocument()
-    expect(screen.getByText('WS:CONNECTED')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByText('MINI_KANBAN.v1')).toBeInTheDocument()
+      expect(screen.getByText('WS:CONNECTED')).toBeInTheDocument()
+    })
 
     await waitFor(() => {
       expect(screen.getByText(/\/Team Product Launch/i)).toBeInTheDocument()
@@ -31,7 +33,7 @@ describe('Mini Kanban App UI & Collaboration', () => {
   it('allows opening the invite link modal', async () => {
     render(<App />)
 
-    const inviteBtn = screen.getByRole('button', { name: /invite_link/i })
+    const inviteBtn = await screen.findByRole('button', { name: /invite_link/i })
     fireEvent.click(inviteBtn)
 
     await waitFor(() => {

@@ -28,8 +28,9 @@ def test_kanban_two_user_collaboration_e2e():
         page1.goto(BASE_URL)
         page1.wait_for_load_state("networkidle")
 
-        # Ensure board is loaded
+        # Ensure board is loaded and columns are rendered
         expect(page1.locator("text=MINI_KANBAN")).to_be_visible(timeout=15000)
+        expect(page1.locator("button:has-text('NEW CARD')").first).to_be_visible(timeout=15000)
 
         # Log in / Switch to Alex if not already
         page1.locator("button:has-text('@')").first.click()
@@ -42,8 +43,8 @@ def test_kanban_two_user_collaboration_e2e():
         task_title = f"Task-{int(time.time())}"
 
         # Click "+ APPEND" or "NEW CARD" button in first column
-        first_col = page1.locator("div[draggable='false']").first
         new_card_btn = page1.locator("button:has-text('NEW CARD')").first
+        expect(new_card_btn).to_be_visible(timeout=10000)
         new_card_btn.click()
 
         # Type new task name and submit
