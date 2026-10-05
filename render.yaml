@@ -14,6 +14,12 @@ services:
         fromDatabase:
           name: kanban-db-dev
           property: connectionString
+      - key: OTEL_SERVICE_NAME
+        value: kanban-backend
+      - key: ENVIRONMENT
+        value: development
+      - key: APP_VERSION
+        value: 0.1.0
 
   # =========================================================================
   # PROD ENVIRONMENT (Production Stack)
@@ -30,6 +36,12 @@ services:
         fromDatabase:
           name: kanban-db-prod
           property: connectionString
+      - key: OTEL_SERVICE_NAME
+        value: kanban-backend
+      - key: ENVIRONMENT
+        value: production
+      - key: APP_VERSION
+        value: 0.1.0
 
 databases:
   # Dev PostgreSQL Database

@@ -8,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.routers import auth, boards, cards, columns, realtime
 from app.store import store
+from app.telemetry import setup_telemetry
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -21,6 +22,9 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+# Instrument backend with OpenTelemetry
+setup_telemetry(app)
 
 # Enable CORS for frontend requests
 app.add_middleware(
