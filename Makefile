@@ -1,4 +1,4 @@
-.PHONY: help install run run-backend run-frontend test test-backend test-frontend test-integration test-e2e build-frontend clean docker-build docker-run compose-up compose-down compose-prod-up compose-prod-down
+.PHONY: help install run run-backend run-frontend test test-backend test-frontend test-integration test-e2e build-frontend clean docker-build docker-run compose-up compose-down compose-prod-up compose-prod-down obs-up obs-down
 
 help:
 	@echo "Available commands:"
@@ -18,6 +18,8 @@ help:
 	@echo "  make compose-down     Stop docker compose services"
 	@echo "  make compose-prod-up  Run full production stack with Postgres using docker-compose.prod.yaml (port 8001)"
 	@echo "  make compose-prod-down Stop production docker compose services"
+	@echo "  make obs-up           Start full Observability stack (Collector, Prometheus, Tempo, Loki, Grafana)"
+	@echo "  make obs-down         Stop Observability stack"
 	@echo "  make clean            Clean caches and build artifacts"
 
 install:
@@ -87,6 +89,16 @@ compose-prod-down:
 	@echo "==> Stopping isolated Production Docker Compose services..."
 	docker compose -f docker-compose.prod.yaml down
 
+obs-up:
+	@echo "==> Starting OpenTelemetry Collector, Prometheus, Tempo, Loki, and Grafana..."
+	docker compose -f docker-compose.observability.yaml up -d
+	@echo "==> Grafana UI: http://localhost:3000 (admin / admin)"
+	@echo "==> Prometheus UI: http://localhost:9090"
+	@echo "==> OTLP Collector listening on :4317 (gRPC) and :4318 (HTTP)"
+
+obs-down:
+	@echo "==> Stopping Observability stack..."
+	docker compose -f docker-compose.observability.yaml down
 
 clean:
 	@echo "==> Cleaning cache and build artifacts..."

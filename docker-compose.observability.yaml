@@ -1,0 +1,81 @@
+services:
+  # OpenTelemetry Collector
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.111.0
+    container_name: kanban-otel-collector
+    restart: unless-stopped
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./observability/otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
+    ports:
+      - "4317:4317" # OTLP gRPC receiver
+      - "4318:4318" # OTLP HTTP receiver
+      - "8888:8888" # Collector metrics
+    depends_on:
+      - tempo
+      - prometheus
+      - loki
+
+  # Prometheus (Metrics)
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: kanban-prometheus
+    restart: unless-stopped
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yaml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-remote-write-receiver"
+    volumes:
+      - ./observability/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+
+  # Grafana Tempo (Traces)
+  tempo:
+    image: grafana/tempo:2.6.0
+    container_name: kanban-tempo
+    restart: unless-stopped
+    command: ["-config.file=/etc/tempo.yaml"]
+    volumes:
+      - ./observability/tempo.yaml:/etc/tempo.yaml:ro
+      - tempo-data:/tmp/tempo
+    ports:
+      - "3200:3200" # Tempo HTTP
+
+  # Grafana Loki (Logs)
+  loki:
+    image: grafana/loki:3.2.0
+    container_name: kanban-loki
+    restart: unless-stopped
+    command: ["-config.file=/etc/loki.yaml"]
+    volumes:
+      - ./observability/loki.yaml:/etc/loki.yaml:ro
+      - loki-data:/tmp/loki
+    ports:
+      - "3100:3100" # Loki HTTP
+
+  # Grafana (Dashboards & Visualization)
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: kanban-grafana
+    restart: unless-stopped
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./observability/grafana-datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+      - tempo
+      - loki
+
+volumes:
+  prometheus-data:
+  tempo-data:
+  loki-data:
+  grafana-data:
